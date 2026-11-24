@@ -408,3 +408,21 @@ body.layout-mode main { max-width: none; padding: 0; }
 .shape-actions button:not(.btn) { border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 8px 12px; font-weight: 700; font-size: 14px; cursor: pointer; color: var(--chilli); }
 .shape-actions button:disabled { opacity: .4; cursor: default; }
 .link-btn { display: block; margin: 10px auto 0; border: 0; background: none; color: var(--leaf); font-weight: 700; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* ---- Boundary fence dialog ---- */
+.fence-dlg { width: min(460px, calc(100vw - 24px)); }
+.fence-opts { display: grid; gap: 6px; max-height: min(52vh, 440px); overflow-y: auto; margin: 4px -4px 14px; padding: 0 4px; }
+.fence-opt {
+  display: grid; grid-template-columns: auto 64px 1fr; align-items: center; gap: 10px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+.fence-opt:hover { border-color: var(--leaf); }
+.fence-opt:active { transform: scale(.985); }
+.fence-opt:has(input:checked) { border-color: var(--green); background: var(--green-soft); }
+.fence-opt input { accent-color: var(--green); width: 18px; height: 18px; margin: 0; }
+.fo-thumb { width: 64px; height: 40px; display: grid; place-items: center; color: var(--muted); }
+.fo-thumb svg { width: 100%; height: 100%; }
+.fo-text { display: grid; line-height: 1.25; }
+.fo-text b { font-size: 15px; }
+.fo-text small { color: var(--muted); font-size: 12.5px; }

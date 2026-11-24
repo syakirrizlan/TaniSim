@@ -53,11 +53,21 @@ const CATALOG = [
     { type: 'tractor', name: 'Chicken tractor', kind: 'box', w: 3, d: 1.5, h: 1, color: '#C99E6B', top: '#A9B7A0' },
     { type: 'hive', name: 'Kelulut hive', kind: 'box', w: 0.6, d: 0.6, h: 1, color: '#8A6A4A', top: '#C9A46A' },
   ] },
+  { cat: 'Fences', items: [
+    { type: 'fence', name: 'Wooden fence', kind: 'fence', style: 'wood', w: 0.15, d: 10, h: 1.2, resize: 'long' },
+    { type: 'fence-barbed', name: 'Barbed-wire fence', kind: 'fence', style: 'barbed', w: 0.15, d: 10, h: 1.3, resize: 'long' },
+    { type: 'fence-electric', name: 'Electric fence', kind: 'fence', style: 'electric', w: 0.15, d: 10, h: 1.1, resize: 'long' },
+    { type: 'fence-chain', name: 'Chain-link fence', kind: 'fence', style: 'chain', w: 0.15, d: 10, h: 1.8, resize: 'long' },
+    { type: 'fence-brc', name: 'BRC mesh fence', kind: 'fence', style: 'brc', w: 0.15, d: 10, h: 1.6, resize: 'long' },
+    { type: 'fence-bamboo', name: 'Bamboo fence', kind: 'fence', style: 'bamboo', w: 0.15, d: 10, h: 1.6, resize: 'long' },
+    { type: 'fence-picket', name: 'Picket fence', kind: 'fence', style: 'picket', w: 0.15, d: 10, h: 1.0, resize: 'long' },
+    { type: 'wall', name: 'Brick wall', kind: 'fence', style: 'wall', w: 0.25, d: 10, h: 1.8, resize: 'long' },
+    { type: 'hedge-fence', name: 'Living hedge (pagar hidup)', kind: 'fence', style: 'hedge', w: 0.8, d: 10, h: 1.4, resize: 'long' },
+    { type: 'gate', name: 'Gate', kind: 'fence', style: 'gate', w: 0.2, d: 3, h: 1.6 },
+  ] },
   { cat: 'Paths & utility', items: [
     { type: 'path', name: 'Path', kind: 'zone', w: 1.2, d: 10, fill: '#D9C7A3', resize: true },
     { type: 'road', name: 'Village road', kind: 'zone', w: 5, d: 40, fill: '#7B7F82', road: true, resize: true },
-    { type: 'fence', name: 'Fence', kind: 'fence', w: 0.15, d: 10, h: 1.2, color: '#8A6A4A', resize: true },
-    { type: 'gate', name: 'Gate', kind: 'fence', w: 0.2, d: 3, h: 1.6, color: '#5E6B73' },
     { type: 'compost', name: 'Compost bays', kind: 'box', w: 3, d: 1.5, h: 1, color: '#6B4F35', top: '#4E3A27' },
     { type: 'solar', name: 'Solar panel', kind: 'box', w: 2, d: 1, h: 0.12, z0: 0.8, color: '#33506E', top: '#2B4A6B' },
     { type: 'sensor', name: 'Sensor (ESP32)', kind: 'box', w: 0.5, d: 0.5, h: 1.2, color: '#C8302A', top: '#E5574F' },
@@ -469,6 +479,132 @@ function bambooSVG(T, it, R) {
   return s + '</g>';
 }
 
+/* Fence styles, shared by fence items (drawn along their centre line) and the boundary fence
+   (drawn along each side of the land, at any angle). */
+const FENCE_STYLES = {
+  wood: { name: 'Wooden fence', h: 1.2, t: 0.15, post: 2.4 },
+  barbed: { name: 'Barbed-wire fence', h: 1.3, t: 0.15, post: 2.5 },
+  electric: { name: 'Electric fence', h: 1.1, t: 0.15, post: 4 },
+  chain: { name: 'Chain-link fence', h: 1.8, t: 0.15, post: 2.5 },
+  brc: { name: 'BRC mesh fence', h: 1.6, t: 0.15, post: 2.5 },
+  bamboo: { name: 'Bamboo fence', h: 1.6, t: 0.15, post: 2 },
+  picket: { name: 'Picket fence', h: 1.0, t: 0.15, post: 2 },
+  wall: { name: 'Brick wall', h: 1.8, t: 0.25, post: 3 },
+  hedge: { name: 'Living hedge (pagar hidup)', h: 1.4, t: 0.8, post: 0 },
+};
+
+function slabAround(a, b, t) {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const nx = (-(b[1] - a[1]) / L) * (t / 2), ny = ((b[0] - a[0]) / L) * (t / 2);
+  const poly = [[a[0] + nx, a[1] + ny], [b[0] + nx, b[1] + ny], [b[0] - nx, b[1] - ny], [a[0] - nx, a[1] - ny]];
+  return polyArea(poly) < 0 ? poly.reverse() : poly;
+}
+
+function fenceRun(a, b, style, h, t) {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (L < 0.05) return '';
+  const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
+  const at = (sv, z) => proj(a[0] + ux * sv, a[1] + uy * sv, z);
+  const ln = (s0, z0, s1, z1, stroke, w, extra = '') => lineTag([at(s0, z0), at(s1, z1)], stroke, w, extra);
+  const plane = (z0, z1, fill, extra = '') => `<polygon points="${pts([at(0, z0), at(L, z0), at(L, z1), at(0, z1)])}" fill="${fill}" ${extra}/>`;
+  const every = (step, cap, fn) => {
+    const n = Math.min(cap, Math.max(1, Math.round(L / step)));
+    let out = '';
+    for (let i = 0; i <= n; i++) out += fn((i * L) / n, i);
+    return out;
+  };
+  const posts = (step, color, w, top = h) => every(step, 400, (sv) => ln(sv, 0, sv, top, color, w, 'stroke-linecap="round"'));
+  const hit = plane(0, h, 'transparent'); // easy to tap even where the fence is only wires
+  switch (style) {
+    case 'wood':
+      return plane(0.05, h, '#9A7652') + every(0.3, 300, (sv) => ln(sv, 0.05, sv, h, '#7E5E40', 0.03 * S))
+        + posts(2.4, '#6B4A2E', 0.16 * S, h + 0.1);
+    case 'barbed':
+      return hit + posts(2.5, '#7A5A3C', 0.13 * S)
+        + [0.35, 0.75, 1.15].map((z) => ln(0, z, L, z, '#8E9499', 0.04 * S) + ln(0, z, L, z, '#6F767B', 0.12 * S, `stroke-dasharray="${0.04 * S} ${0.3 * S}"`)).join('');
+    case 'electric':
+      return hit + posts(4, '#5E6B73', 0.09 * S)
+        + [0.3, 0.62, 0.95].map((z) => ln(0, z, L, z, '#F0C23B', 0.05 * S)).join('')
+        + every(4, 200, (sv) => [0.3, 0.62, 0.95].map((z) => { const [x, y] = at(sv, z); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${0.06 * S}" fill="#FFFFFF"/>`; }).join(''));
+    case 'chain': {
+      let mesh = '';
+      for (let s0 = -h; s0 < L; s0 += 0.5) {
+        const a0 = Math.max(s0, 0), a1 = Math.min(s0 + h, L);
+        if (a1 > a0) mesh += ln(a0, a0 - s0, a1, a1 - s0, '#8E989E', 0.02 * S, 'opacity=".7"');
+        const b0 = Math.max(s0, 0), b1 = Math.min(s0 + h, L);
+        if (b1 > b0) mesh += ln(b0, h - (b0 - s0), b1, h - (b1 - s0), '#8E989E', 0.02 * S, 'opacity=".7"');
+      }
+      return plane(0, h, '#A9B3BA', 'fill-opacity=".22"') + mesh + posts(2.5, '#7D868C', 0.1 * S) + ln(0, h, L, h, '#7D868C', 0.06 * S);
+    }
+    case 'brc': {
+      let grid = every(0.2, 400, (sv) => ln(sv, 0.05, sv, h - 0.1, '#B8C2C8', 0.025 * S));
+      for (let z = 0.05; z < h; z += 0.3) grid += ln(0, z, L, z, '#B8C2C8', 0.025 * S);
+      return hit + grid + ln(0, h - 0.1, L, h - 0.1, '#C9D2D7', 0.07 * S) + posts(2.5, '#9AA5AD', 0.1 * S);
+    }
+    case 'bamboo':
+      return plane(0, h, '#B8A05C', 'fill-opacity=".35"') + every(0.1, 400, (sv, i) => ln(sv, 0, sv, h - (i % 3) * 0.06, i % 2 ? '#C9B26A' : '#AE9650', 0.09 * S))
+        + ln(0, 0.4, L, 0.4, '#6E5A2E', 0.06 * S) + ln(0, h - 0.3, L, h - 0.3, '#6E5A2E', 0.06 * S);
+    case 'picket':
+      return hit + ln(0, 0.3, L, 0.3, '#E4DACB', 0.06 * S) + ln(0, 0.75, L, 0.75, '#E4DACB', 0.06 * S)
+        + every(0.14, 400, (sv) => ln(sv, 0.08, sv, h, '#F4EFE6', 0.07 * S)) + posts(2, '#D8CDBA', 0.11 * S, h + 0.05);
+    case 'wall':
+      return prism(slabAround(a, b, t), 0, h, '#C9C2B6', '#B5776A') + prism(slabAround(a, b, t + 0.06), h, 0.08, '#9C968B', '#8F897F');
+    case 'hedge': {
+      let s2 = prism(slabAround(a, b, t), 0, h * 0.85, '#4A8B4E', '#3F7F45');
+      s2 += every(0.6, 300, (sv) => { const [x, y] = at(sv, h * 0.85); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(0.36 * S).toFixed(1)}" fill="${'#5AA05E'}"/>`; });
+      return s2;
+    }
+    case 'gate':
+      return plane(0.1, h, '#6E7B84', 'fill-opacity=".2"') + every(0.25, 100, (sv) => ln(sv, 0.1, sv, h, '#7D8A93', 0.04 * S))
+        + ln(0, 0.1, L, 0.1, '#5E6B73', 0.07 * S) + ln(0, h, L, h, '#5E6B73', 0.07 * S) + ln(0.1, 0.1, L - 0.1, h, '#5E6B73', 0.05 * S)
+        + ln(0, 0, 0, h + 0.15, '#4C575E', 0.18 * S, 'stroke-linecap="round"') + ln(L, 0, L, h + 0.15, '#4C575E', 0.18 * S, 'stroke-linecap="round"');
+    default:
+      return plane(0, h, '#8A6A4A');
+  }
+}
+
+// A fence item runs along the long side of its footprint.
+function fenceItemSVG(T, r) {
+  const alongX = r.x1 - r.x0 >= r.y1 - r.y0;
+  const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+  let a = alongX ? [r.x0, cy] : [cx, r.y0];
+  let b = alongX ? [r.x1, cy] : [cx, r.y1];
+  // Draw from the far end to the near end so posts overlap the right way.
+  const [ar, as] = rot2(a[0], a[1]), [br, bs] = rot2(b[0], b[1]);
+  if (ar + as > br + bs) [a, b] = [b, a];
+  return fenceRun(a, b, T.style, T.h, Math.min(r.x1 - r.x0, r.y1 - r.y0));
+}
+
+// The boundary fence follows every side of the land. Sides facing away are drawn
+// before the items, sides facing the viewer after them.
+function boundaryFence(front) {
+  const style = st.plot.fence;
+  if (!style || !FENCE_STYLES[style]) return '';
+  const F = FENCE_STYLES[style];
+  const p = st.plot.pts;
+  let out = '';
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length];
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (L < E) continue;
+    // Pull the fence a little inside the land so it sits on the grass, not the edge.
+    const nx = (b[1] - a[1]) / L, ny = -(b[0] - a[0]) / L; // outward normal
+    const k = F.t / 2 + 0.05;
+    const aa = [a[0] - nx * k, a[1] - ny * k], bb = [b[0] - nx * k, b[1] - ny * k];
+    const isFront = facing(nx, ny).k > 0;
+    if (isFront !== front) continue;
+    out += fenceRun(aa, bb, style, F.h, F.t);
+  }
+  return out ? `<g class="bfence">${out}</g>` : '';
+}
+
+function perimeter() {
+  const p = st.plot.pts;
+  let L = 0;
+  for (let i = 0; i < p.length; i++) { const q = p[(i + 1) % p.length]; L += Math.hypot(q[0] - p[i][0], q[1] - p[i][1]); }
+  return L;
+}
+
 function topZ(T, r) {
   if (T.kind === 'building') return T.h + (r ? roofRise(inset(r, -0.25)) : 1);
   if (T.kind === 'greenhouse') return T.h + (r ? roofRise(r) : 1);
@@ -496,7 +632,7 @@ function itemBody(it) {
     case 'water': return waterSVG(r);
     case 'bed': return box(r, 0, T.h, '#8A6A4A', '#6E5136') + cropSVG(T, r);
     case 'box': return box(r, T.z0 || 0, T.h, T.top || T.color, T.color);
-    case 'fence':
+    case 'fence': return T.style ? fenceItemSVG(T, r) : box(r, 0, T.h, shade(T.color, 1.18), T.color);
     case 'hedge': return box(r, 0, T.h, shade(T.color, 1.18), T.color);
     case 'building': return buildingSVG(T, r);
     case 'greenhouse': return greenhouseSVG(T, r);
@@ -548,7 +684,14 @@ function fits(it) {
   if (!isSolid(T)) return true;
   const r = rectOf(it);
   if (!rectInPoly(r, st.plot.pts)) return false;
-  return !st.items.some((o) => o.id !== it.id && isSolid(TYPES[o.type]) && overlap(r, rectOf(o)));
+  const fenceLike = T.kind === 'fence' && T.style;
+  return !st.items.some((o) => {
+    if (o.id === it.id) return false;
+    const O = TYPES[o.type];
+    if (!isSolid(O)) return false;
+    if (fenceLike && O.kind === 'fence' && O.style) return false; // fences can meet and cross at corners
+    return overlap(r, rectOf(o));
+  });
 }
 function snapCenter(it, x, y) {
   const [ew, ed] = dims(it);
@@ -618,7 +761,9 @@ function depthOrder(items) {
 function handlePositions(sel) {
   const r = rectOf(sel);
   const off = 22 / cam.zoom;
-  return [['x', r.x1, sel.y, 1, 0], ['y', sel.x, r.y1, 0, 1]].map(([axis, hx, hy, ux, uy]) => {
+  let axes = [['x', r.x1, sel.y, 1, 0], ['y', sel.x, r.y1, 0, 1]];
+  if (TYPES[sel.type].resize === 'long') axes = axes.filter(([ax]) => ax === (r.x1 - r.x0 >= r.y1 - r.y0 ? 'x' : 'y'));
+  return axes.map(([axis, hx, hy, ux, uy]) => {
     const [ex, ey] = proj(hx, hy, 0.06);
     const [ax, ay] = proj(hx + ux, hy + uy, 0.06);
     const len = Math.hypot(ax - ex, ay - ey) || 1;
@@ -670,7 +815,9 @@ function render() {
     .sort((a, b) => b.w * b.d - a.w * a.d);
   const solids = depthOrder(st.items.filter((i) => isSolid(TYPES[i.type])));
   for (const it of zones) out.push(itemSVG(it, fx(it)));
+  out.push(boundaryFence(false));
   for (const it of solids) out.push(itemSVG(it, fx(it)));
+  out.push(boundaryFence(true));
 
   // Selection outline + resize handles
   const sel = st.items.find((i) => i.id === ui.sel);
@@ -879,7 +1026,8 @@ function sanitize(raw) {
     const label = typeof r.label === 'string' ? r.label.slice(0, 24) : '';
     items.push({ id, type: r.type, x, y, w, d, rot, label });
   }
-  return { plot: { pts: land }, items };
+  const fence = typeof raw.plot?.fence === 'string' && Object.hasOwn(FENCE_STYLES, raw.plot.fence) ? raw.plot.fence : '';
+  return { plot: { pts: land, fence }, items };
 }
 
 function saveSoon() {
@@ -991,6 +1139,17 @@ function select(id) {
   requestRender();
 }
 
+function sizeText(it) {
+  const T = TYPES[it.type];
+  if (T.kind === 'fence' && T.style) {
+    const len = Math.max(it.w, it.d);
+    const F = FENCE_STYLES[T.style];
+    const posts = F && F.post ? ` · about ${Math.round(len / F.post) + 1} posts` : '';
+    return `${fmt(len)} m ${T.style === 'gate' ? 'wide' : 'long'}${posts}${T.resize ? ' · drag ⊕ to lengthen' : ''}`;
+  }
+  return `${fmt(it.w)} × ${fmt(it.d)} m · ${fmt(it.w * it.d)} m²${T.resize ? ' · drag ⊕ to resize' : ''}`;
+}
+
 function renderInspector() {
   const it = st.items.find((i) => i.id === ui.sel);
   const box = els.inspector;
@@ -1000,7 +1159,7 @@ function renderInspector() {
   box.hidden = false;
   box.innerHTML = `
     <div class="insp-head">
-      <div><div class="insp-name">${esc(T.name)}</div><div class="insp-size">${fmt(it.w)} × ${fmt(it.d)} m · ${fmt(it.w * it.d)} m²${T.resize ? ' · drag ⊕ to resize' : ''}</div></div>
+      <div><div class="insp-name">${esc(T.name)}</div><div class="insp-size">${sizeText(it)}</div></div>
       <button type="button" class="icon-btn" data-act="close" aria-label="Done">✕</button>
     </div>
     <label class="insp-label"><span>Label</span><input type="text" maxlength="24" placeholder="e.g. C1, Hut" value="${esc(it.label || '')}"></label>
@@ -1045,7 +1204,7 @@ function removeCorner() {
   const next = st.plot.pts.filter((_, i) => i !== sh.selV);
   if (selfCrosses(next) || Math.abs(polyArea(next)) < 25) { toast("Can't remove that corner: the sides would cross."); return; }
   pushUndo();
-  st.plot = { pts: next };
+  st.plot = { ...st.plot, pts: next };
   sh.selV = null;
   saveSoon();
   requestRender();
@@ -1168,7 +1327,7 @@ function onStageDown(e) {
       const next = [...p.slice(0, i + 1), v, ...p.slice(i + 1)];
       if (selfCrosses(next)) { ui.drag = { ...start, mode: 'pan-pending', tap: null }; return; }
       pushUndo();
-      st.plot = { pts: next };
+      st.plot = { ...st.plot, pts: next };
       ui.shape.selV = i + 1;
       ui.drag = { ...start, mode: 'vertex', i: i + 1, orig, base: [...v], w0, pushed: true, valid: true };
       requestRender();
@@ -1225,7 +1384,7 @@ function onStageMove(e) {
     const [wx, wy] = clientToWorld(e.clientX, e.clientY);
     const next = st.plot.pts.map((v) => [...v]);
     next[d.i] = [snap(d.base[0] + wx - d.w0[0]), snap(d.base[1] + wy - d.w0[1])];
-    st.plot = { pts: next };
+    st.plot = { ...st.plot, pts: next };
     d.valid = !selfCrosses(next) && Math.abs(polyArea(next)) >= 25;
     requestRender();
   }
@@ -1266,7 +1425,7 @@ function onStageMove(e) {
 
 function renderInspectorSize(it) {
   const el = els.inspector.querySelector('.insp-size');
-  if (el) el.textContent = `${fmt(it.w)} × ${fmt(it.d)} m · ${fmt(it.w * it.d)} m² · drag ⊕ to resize`;
+  if (el) el.textContent = sizeText(it);
 }
 
 function cancelDrag() {
@@ -1278,7 +1437,7 @@ function cancelDrag() {
     if (d.pushed) undoStack.pop();
   }
   if (d.mode === 'vertex' && d.orig) {
-    st.plot = { pts: d.orig };
+    st.plot = { ...st.plot, pts: d.orig };
     if (d.pushed) undoStack.pop();
   }
   ui.drag = null;
@@ -1302,7 +1461,7 @@ function onStageUp(e) {
   if (d.mode === 'vertex-pending') { ui.shape.selV = d.i; requestRender(); return; }
   if (d.mode === 'vertex') {
     if (d.valid === false) {
-      st.plot = { pts: d.orig };
+      st.plot = { ...st.plot, pts: d.orig };
       if (d.pushed) undoStack.pop();
       toast("The land's sides can't cross each other.");
     } else saveSoon();
@@ -1496,6 +1655,7 @@ export function mount(host) {
         <div class="menu" hidden role="menu">
           <button type="button" role="menuitem" data-act="starter">Start from Block C</button>
           <button type="button" role="menuitem" data-act="shape">Edit land shape</button>
+          <button type="button" role="menuitem" data-act="bfence">Boundary fence…</button>
           <button type="button" role="menuitem" data-act="plot">Land as a rectangle…</button>
           <button type="button" role="menuitem" data-act="png">Save picture (PNG)</button>
           <button type="button" role="menuitem" data-act="export">Export layout file</button>
@@ -1536,6 +1696,14 @@ export function mount(host) {
       <div class="tray-items"></div>
     </div>
     <input type="file" accept="application/json,.json" hidden>
+    <dialog class="sheet fence-dlg">
+      <form method="dialog">
+        <h2>Boundary fence</h2>
+        <p class="muted fence-perim"></p>
+        <div class="fence-opts" role="radiogroup" aria-label="Fence type"></div>
+        <div class="dlg-actions"><button value="cancel" formnovalidate class="btn ghost-btn">Cancel</button><button value="ok" class="btn">Save</button></div>
+      </form>
+    </dialog>
     <dialog class="sheet plot-dlg">
       <form method="dialog">
         <h2>Land as a rectangle</h2>
@@ -1564,7 +1732,7 @@ export function mount(host) {
     els.tray.innerHTML = CATALOG[ui.cat].items.map((T, i) => {
       thumbs[T.type] ||= thumbSVG(TYPES[T.type]);
       return `<button type="button" class="tray-item" data-type="${T.type}" style="--i:${i}" title="Tap to add, or drag up onto the land">
-        <span class="thumb">${thumbs[T.type]}</span><span class="nm">${esc(T.name)}</span><span class="sz">${fmt(T.w)}×${fmt(T.d)} m</span></button>`;
+        <span class="thumb">${thumbs[T.type]}</span><span class="nm">${esc(T.name)}</span><span class="sz">${T.kind === 'fence' && T.style ? `${fmt(T.d)} m ${T.style === 'gate' ? 'wide' : 'long'}` : `${fmt(T.w)}×${fmt(T.d)} m`}</span></button>`;
     }).join('');
     root.querySelectorAll('.tray-tabs [data-cat]').forEach((b) => b.setAttribute('aria-selected', String(Number(b.dataset.cat) === ui.cat)));
   };
@@ -1638,6 +1806,7 @@ export function mount(host) {
       case 'shape': enterShape(); break;
       case 'shapedone': exitShape(); break;
       case 'rmcorner': removeCorner(); break;
+      case 'bfence': openFenceDialog(); break;
       case 'png': exportPNG(); break;
       case 'export': exportFile(); break;
       case 'import': els.file.click(); break;
@@ -1659,6 +1828,41 @@ export function mount(host) {
     els.file.value = '';
   });
 
+  const fenceDlg = root.querySelector('.fence-dlg');
+  function fenceThumb(style) {
+    const saved = { ...cam }, savedPivot = pivot;
+    cam = { t: 1, angle: 0, zoom: 1, tx: 0, ty: 0 };
+    pivot = [0, 0];
+    const F = FENCE_STYLES[style];
+    const svg = fenceRun([0, 0], [0, 4], style, F.h, F.t);
+    const b = bboxOf([proj(0, 0, 0), proj(0, 4, 0), proj(0, 0, F.h + 0.4), proj(0, 4, F.h + 0.4), proj(-F.t, 0, 0), proj(F.t, 4, 0)]);
+    cam = saved; pivot = savedPivot;
+    return `<svg viewBox="${(b.x0 - 4).toFixed(1)} ${(b.y0 - 4).toFixed(1)} ${(b.x1 - b.x0 + 8).toFixed(1)} ${(b.y1 - b.y0 + 8).toFixed(1)}" aria-hidden="true">${svg}</svg>`;
+  }
+  function openFenceDialog() {
+    const L = perimeter();
+    const cur = st.plot.fence || '';
+    fenceDlg.querySelector('.fence-perim').textContent = `Runs along every side of your land: ${fmt(L)} m in total.`;
+    fenceDlg.querySelector('.fence-opts').innerHTML = [['', 'No boundary fence'], ...Object.entries(FENCE_STYLES).map(([k, F]) => [k, F.name])].map(([k, name]) => {
+      const F = FENCE_STYLES[k];
+      const posts = F && F.post ? ` · about ${Math.ceil(L / F.post)} posts` : '';
+      return `<label class="fence-opt"><input type="radio" name="bfence" value="${k}"${k === cur ? ' checked' : ''}>
+        <span class="fo-thumb">${k ? fenceThumb(k) : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'}</span>
+        <span class="fo-text"><b>${esc(name)}</b>${F ? `<small>${fmt(F.h)} m high${posts}</small>` : ''}</span></label>`;
+    }).join('');
+    fenceDlg.showModal();
+  }
+  fenceDlg.addEventListener('close', () => {
+    if (fenceDlg.returnValue !== 'ok') return;
+    const v = fenceDlg.querySelector('input[name=bfence]:checked')?.value ?? '';
+    if (v === (st.plot.fence || '') || (v && !Object.hasOwn(FENCE_STYLES, v))) return;
+    pushUndo();
+    st.plot = { ...st.plot, fence: v };
+    saveSoon();
+    requestRender();
+    toast(v ? `${FENCE_STYLES[v].name} around ${fmt(perimeter())} m of boundary.` : 'Boundary fence removed.');
+  });
+
   const form = els.plotDlg.querySelector('form');
   const area = els.plotDlg.querySelector('.plot-area');
   const showArea = () => {
@@ -1676,7 +1880,7 @@ export function mount(host) {
     const w = Math.max(5, Math.min(500, Number(form.w.value) || 80));
     const h = Math.max(5, Math.min(500, Number(form.h.value) || 66));
     pushUndo();
-    st.plot = { pts: rectPts(w, h) };
+    st.plot = { ...st.plot, pts: rectPts(w, h) };
     fit(true);
     saveSoon();
     reportOffLand();
