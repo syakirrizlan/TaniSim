@@ -1,0 +1,13 @@
+{
+  "name": "tanisim",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-pwa.mjs",
+    "serve": "node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "marked": "^15.0.12",
+    "mermaid": "^11.4.1"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "TaniSim — 1.3-Acre Farm Plan",
+  "short_name": "TaniSim",
+  "description": "Farm plan notes, schedules and milestones for the 1.3-acre farm at Sungai Lalah, Pedas. Works offline.",
+  "lang": "en-MY",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#EEF1E6",
+  "theme_color": "#1E4A33",
+  "categories": ["productivity", "lifestyle"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Up next", "url": "./#/", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Notes", "url": "./#/notes", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
