@@ -1,0 +1,37 @@
+kit.score(function (S, T) {
+  S.tempo(120, { t0: 0 });
+  S.program('pad', 'pad', { rev: 0.6 });
+  S.program('keys', 'ep', { rev: 0.3 });
+  S.program('bass', 'bass');
+  S.program('mallet', 'marimba', { rev: 0.25 });
+  S.chord('pad', ['D3', 'A3', 'F#4'], { t: 0, dur: 4.2, vel: 34 });
+  S.note('mallet', 'A5', { t: 0, dur: 0.6, vel: 40 });
+  [1.2, 1.4, 1.6].forEach((x) => S.fx('pop', T.farm + x, { vel: 30 }));
+  S.fx('thud', T.farm + 1.55, { vel: 34 });
+  S.fx('boing', T.farm + 2.15, { vel: 46 });
+  const prog = [['D2', ['D3', 'F#3', 'A3', 'D4']], ['B1', ['B2', 'D3', 'F#3', 'B3']], ['G1', ['G2', 'B2', 'D3', 'G3']], ['A1', ['A2', 'C#3', 'E3', 'A3']], ['D2', ['D3', 'F#3', 'A3', 'D4']]];
+  prog.forEach(([b, c], i) => {
+    S.note('bass', b, { beat: 8 + i * 4, beats: 3.5, vel: 74 });
+    S.chord('keys', c, { beat: 8 + i * 4, beats: 3.8, vel: 42 });
+  });
+  S.pattern('mallet', 'x.x.X.xx', { from: 8, repeat: 5, pitch: ['D5', 'A4', 'F#5', 'A4', 'E5', 'A4'], vel: 54 });
+  S.drums({ kick: 'x...x...', sidestick: '..x...x.', hat: 'oxoxoxox' }, { from: 8, repeat: 5, vel: 70 });
+  [0, 1, 2].forEach((i) => S.fx('pop', T.agents + 1.1 + i * 0.35, { vel: 46 }));
+  [0.9, 1.5, 2.1, 3.5].forEach((x) => S.fx('pop', T.work + x, { vel: 40 }));
+  S.fx('click', T.work + 2.8, { vel: 50 });
+  S.fx('chime', T.work + 3.5, { vel: 48 });
+  S.fx('roll', T.work + 3.6, { dur: 0.6, vel: 36 });
+  const hit = T.approve + 1.72;
+  S.chord('pad', ['G3', 'B3', 'D4'], { t: T.approve, dur: 1.8, vel: 30 });
+  S.fx('revswell', hit, { dur: 1.1, vel: 50 });
+  S.run('mallet', ['D5', 'E5', 'F#5', 'A5'], { t: hit - 0.42, step: 0.1, vel: 44, cresc: 8 });
+  S.fx('thud', hit, { vel: 90 });
+  S.drum('crash', { t: hit, vel: 46 });
+  S.chord('keys', ['D3', 'A3', 'D4', 'F#4'], { t: hit, dur: 3, vel: 70 });
+  S.note('bass', 'D2', { t: hit, dur: 2, vel: 84 });
+  S.chord('pad', ['D3', 'A3', 'D4', 'F#4'], { t: hit, dur: T.END - hit, vel: 40 });
+  [0, 1, 2].forEach((i) => S.fx('tick', T.approve + 2.05 + i * 0.15, { vel: 40 }));
+  S.note('mallet', 'A5', { t: T.approve + 3.2, dur: 0.8, vel: 34 });
+  S.note('mallet', 'D6', { t: T.approve + 4.2, dur: 1.2, vel: 28 });
+  S.master({ gain: -6, fadeOut: 1.2 });
+});
