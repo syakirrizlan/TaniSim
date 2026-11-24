@@ -348,6 +348,62 @@ function findSpot(it, x, y) {
 }
 
 /* ---------------- Render ---------------- */
+// Back-to-front order for solids. Footprints are separated along a camera axis
+// (the viewer looks from +rx+ry), so "A is behind B" is decided per pair from the
+// rotated footprints, then resolved with a topological sort. The centre depth only
+// breaks ties, so a long fence in front of a hut is drawn after the hut.
+function depthOrder(items) {
+  const n = items.length;
+  const boxes = items.map((it) => {
+    const c = cornersOf(rectOf(it)).map((p) => rot2(p[0], p[1]));
+    const xs = c.map((p) => p[0]), ys = c.map((p) => p[1]);
+    const [cx, cy] = rot2(it.x, it.y);
+    return { it, rx0: Math.min(...xs), rx1: Math.max(...xs), ry0: Math.min(...ys), ry1: Math.max(...ys), k: cx + cy };
+  });
+  const after = Array.from({ length: n }, () => []);
+  const indeg = new Array(n).fill(0);
+  const T = 1e-4;
+  for (let a = 0; a < n; a++) {
+    for (let b = a + 1; b < n; b++) {
+      const A = boxes[a], B = boxes[b];
+      let first = -1;
+      if (A.rx1 <= B.rx0 + T) first = a;
+      else if (B.rx1 <= A.rx0 + T) first = b;
+      else if (A.ry1 <= B.ry0 + T) first = a;
+      else if (B.ry1 <= A.ry0 + T) first = b;
+      if (first < 0) continue;
+      const second = first === a ? b : a;
+      after[first].push(second);
+      indeg[second]++;
+    }
+  }
+  const out = [];
+  const done = new Array(n).fill(false);
+  for (let step = 0; step < n; step++) {
+    let pick = -1;
+    for (let i = 0; i < n; i++) if (!done[i] && indeg[i] === 0 && (pick < 0 || boxes[i].k < boxes[pick].k)) pick = i;
+    if (pick < 0) { // cycle (only possible mid-rotation): fall back to centre depth
+      boxes.map((b, i) => i).filter((i) => !done[i]).sort((x, y) => boxes[x].k - boxes[y].k).forEach((i) => out.push(boxes[i].it));
+      return out;
+    }
+    done[pick] = true;
+    out.push(boxes[pick].it);
+    for (const j of after[pick]) indeg[j]--;
+  }
+  return out;
+}
+
+// Resize knobs sit just outside the item, so a finger on the item itself always moves it.
+function handlePositions(sel) {
+  const r = rectOf(sel);
+  const off = 22 / cam.zoom;
+  return [['x', r.x1, sel.y, 1, 0], ['y', sel.x, r.y1, 0, 1]].map(([axis, hx, hy, ux, uy]) => {
+    const [ex, ey] = proj(hx, hy, 0.06);
+    const [ax, ay] = proj(hx + ux, hy + uy, 0.06);
+    const len = Math.hypot(ax - ex, ay - ey) || 1;
+    return { axis, ex, ey, kx: ex + ((ax - ex) / len) * off, ky: ey + ((ay - ey) / len) * off };
+  });
+}
 function requestRender() {
   if (!ui || ui.raf) return;
   ui.raf = requestAnimationFrame(() => { ui.raf = 0; render(); });
@@ -388,9 +444,7 @@ function render() {
 
   const zones = st.items.filter((i) => !isSolid(TYPES[i.type]))
     .sort((a, b) => b.w * b.d - a.w * a.d);
-  const solids = st.items.filter((i) => isSolid(TYPES[i.type]))
-    .map((i) => { const [rx, ry] = rot2(i.x, i.y); return { i, k: rx + ry }; })
-    .sort((a, b) => a.k - b.k).map((o) => o.i);
+  const solids = depthOrder(st.items.filter((i) => isSolid(TYPES[i.type])));
   for (const it of zones) out.push(itemSVG(it, fx(it)));
   for (const it of solids) out.push(itemSVG(it, fx(it)));
 
@@ -402,9 +456,8 @@ function render() {
     const bad = ui.drag && ui.drag.id === sel.id && ui.drag.valid === false;
     out.push(`<polygon class="sel-ring${bad ? ' bad' : ''}" points="${pts(cornersOf(r).map((p) => proj(p[0], p[1], 0.06)))}" fill="none" stroke-width="${2.5 / cam.zoom}" stroke-dasharray="${7 / cam.zoom} ${5 / cam.zoom}"/>`);
     if (T.resize && !(ui.drag && ui.drag.mode === 'move')) {
-      for (const [axis, hx, hy] of [['x', r.x1, sel.y], ['y', sel.x, r.y1]]) {
-        const [px, py] = proj(hx, hy, 0.06);
-        out.push(`<g class="handle" data-handle="${axis}"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${20 / cam.zoom}" fill="transparent"/><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${8 / cam.zoom}" fill="#FFFFFF" stroke="#1E4A33" stroke-width="${2.5 / cam.zoom}"/><path d="M${(px - 3.5 / cam.zoom).toFixed(1)} ${py.toFixed(1)}h${(7 / cam.zoom).toFixed(1)}M${px.toFixed(1)} ${(py - 3.5 / cam.zoom).toFixed(1)}v${(7 / cam.zoom).toFixed(1)}" stroke="#1E4A33" stroke-width="${1.6 / cam.zoom}"/></g>`);
+      for (const { axis, ex, ey, kx: px, ky: py } of handlePositions(sel)) {
+        out.push(`<g class="handle" data-handle="${axis}"><line x1="${ex.toFixed(1)}" y1="${ey.toFixed(1)}" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}" stroke="#F2B33D" stroke-width="${2 / cam.zoom}"/><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${14 / cam.zoom}" fill="transparent"/><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${8 / cam.zoom}" fill="#FFFFFF" stroke="#1E4A33" stroke-width="${2.5 / cam.zoom}"/><path d="M${(px - 3.5 / cam.zoom).toFixed(1)} ${py.toFixed(1)}h${(7 / cam.zoom).toFixed(1)}M${px.toFixed(1)} ${(py - 3.5 / cam.zoom).toFixed(1)}v${(7 / cam.zoom).toFixed(1)}" stroke="#1E4A33" stroke-width="${1.6 / cam.zoom}"/></g>`);
       }
     }
   }
@@ -494,7 +547,7 @@ function moveCamera(target) {
     cam.tx = v.w / 2 - px * cam.zoom;
     cam.ty = v.h / 2 - py * cam.zoom;
   };
-  if (reduceMotion()) { Object.assign(cam, target); apply(); render(); syncViewButtons(); saveSoon(); return; }
+  if (reduceMotion()) { Object.assign(cam, target); cam.angle = ((cam.angle % 360) + 360) % 360; apply(); render(); syncViewButtons(); saveSoon(); return; }
   tween(480, (k) => {
     cam.t = from.t + ((target.t ?? from.t) - from.t) * k;
     cam.angle = from.angle + ((target.angle ?? from.angle) - from.angle) * k;
@@ -532,7 +585,7 @@ function sanitize(raw) {
   const items = [];
   const seen = new Set();
   for (const r of raw.items.slice(0, 2000)) {
-    if (!r || !TYPES[r.type]) continue;
+    if (!r || typeof r.type !== 'string' || !Object.hasOwn(TYPES, r.type)) continue;
     const x = num(r.x, -600, 1100), y = num(r.y, -600, 1100), w = num(r.w, 0.1, 500), d = num(r.d, 0.1, 500);
     if (x === null || y === null || w === null || d === null) continue;
     let id = typeof r.id === 'string' && /^[\w-]{1,40}$/.test(r.id) ? r.id : newId();
@@ -552,7 +605,7 @@ function saveSoon() {
 }
 function save() {
   try {
-    localStorage.setItem(STORE, JSON.stringify({ v: 1, plot: st.plot, items: st.items, cam: { t: Math.round(cam.t), angle: cam.angle } }));
+    localStorage.setItem(STORE, JSON.stringify({ v: 1, plot: st.plot, items: st.items, cam: { t: Math.round(cam.t), angle: ((Math.round(cam.angle / 90) * 90 % 360) + 360) % 360 } }));
   } catch { /* storage unavailable: layout lives for this session only */ }
 }
 function load() {
@@ -672,8 +725,13 @@ function renderInspector() {
       ${blockC ? '<a class="insp-link" href="#/notes/05a-block-c-cash-beds">Block C schedule →</a>' : ''}
     </div>`;
   const input = box.querySelector('input');
-  input.addEventListener('focus', () => pushUndo(), { once: true });
-  input.addEventListener('input', () => { it.label = input.value.slice(0, 24); requestRender(); saveSoon(); });
+  let pushed = false;
+  input.addEventListener('input', () => {
+    if (!pushed) { pushUndo(); pushed = true; }
+    it.label = input.value.slice(0, 24);
+    requestRender();
+    saveSoon();
+  });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
 }
 
@@ -778,7 +836,7 @@ function onStageDown(e) {
   const start = { sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY };
   if (handle && ui.sel) {
     const it = st.items.find((i) => i.id === ui.sel);
-    ui.drag = { ...start, mode: 'resize-pending', id: it.id, axis: handle.dataset.handle, orig: { ...it } };
+    ui.drag = { ...start, mode: 'resize-pending', id: it.id, axis: handle.dataset.handle, orig: { ...it }, w0: clientToWorld(e.clientX, e.clientY) };
   } else if (g) {
     const it = st.items.find((i) => i.id === g.dataset.id);
     if (!it) return;
@@ -823,21 +881,23 @@ function onStageMove(e) {
     requestRender();
   } else if (d.mode === 'move') {
     const it = st.items.find((i) => i.id === d.id);
+    if (!it) { ui.drag = null; return; }
     const [wx, wy] = clientToWorld(e.clientX, e.clientY);
     [it.x, it.y] = snapCenter(it, d.orig.x + wx - d.w0[0], d.orig.y + wy - d.w0[1]);
     d.valid = fits(it);
     requestRender();
   } else if (d.mode === 'resize') {
     const it = st.items.find((i) => i.id === d.id);
+    if (!it) { ui.drag = null; return; }
     const [wx, wy] = clientToWorld(e.clientX, e.clientY);
     const r0 = rectOf(d.orig);
     const swapped = (it.rot / 90) % 2 === 1;
     if (d.axis === 'x') {
-      const ew = Math.max(SNAP, Math.min(400, snap(wx - r0.x0)));
+      const ew = Math.max(SNAP, Math.min(400, snap(r0.x1 - r0.x0 + wx - d.w0[0])));
       if (swapped) it.d = ew; else it.w = ew;
       it.x = r0.x0 + ew / 2;
     } else {
-      const ed = Math.max(SNAP, Math.min(400, snap(wy - r0.y0)));
+      const ed = Math.max(SNAP, Math.min(400, snap(r0.y1 - r0.y0 + wy - d.w0[1])));
       if (swapped) it.w = ed; else it.d = ed;
       it.y = r0.y0 + ed / 2;
     }
@@ -961,10 +1021,21 @@ function onWindowUp(e) {
 
 function onKey(e) {
   if (e.target.closest && e.target.closest('input, textarea, select, dialog')) return;
+  if (e.key === 'Escape' && !els.menu.hidden) { closeMenu(true); return; }
+  const busy = ui.place || ui.trayPress || (ui.drag && (ui.drag.mode === 'move' || ui.drag.mode === 'resize' || ui.drag.mode === 'move-pending' || ui.drag.mode === 'resize-pending'));
+  if (busy) {
+    if (e.key === 'Escape') {
+      if (ui.place) { ui.place = null; els.root.classList.remove('placing'); }
+      ui.trayPress = null;
+      cancelDrag();
+      requestRender();
+    }
+    return;
+  }
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
-  if (e.key === 'Escape') { if (ui.place) { ui.place = null; els.root.classList.remove('placing'); requestRender(); } else select(null); return; }
+  if (e.key === 'Escape') { select(null); return; }
   const it = st.items.find((i) => i.id === ui.sel);
   if (!it) return;
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSel(); }
@@ -984,6 +1055,13 @@ function onKey(e) {
     Object.assign(it, before); pushUndo(); Object.assign(it, after);
     requestRender(); saveSoon();
   }
+}
+
+function closeMenu(refocus) {
+  els.menu.hidden = true;
+  const btn = els.root.querySelector('[data-act=menu]');
+  btn.setAttribute('aria-expanded', 'false');
+  if (refocus) btn.focus();
 }
 
 /* ---------------- Mount ---------------- */
@@ -1116,6 +1194,10 @@ export function mount(host) {
   on(els.svg, 'pointercancel', onStageUp);
   on(els.svg, 'wheel', onWheel, { passive: false });
   on(els.tray, 'pointerdown', onTrayDown);
+  on(els.tray, 'click', (e) => {
+    const b = e.target.closest('[data-type]');
+    if (b && e.detail === 0 && !ui.animating) quickPlace(b.dataset.type);
+  });
   on(window, 'pointermove', onWindowMove, { passive: false });
   on(window, 'pointerup', onWindowUp);
   on(window, 'pointercancel', onWindowUp);
@@ -1216,6 +1298,7 @@ export function mount(host) {
   function toggleMenu(open) {
     els.menu.hidden = !open;
     root.querySelector('[data-act=menu]').setAttribute('aria-expanded', String(open));
+    if (open) els.menu.querySelector('button')?.focus();
   }
 
   syncViewButtons();
