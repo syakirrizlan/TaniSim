@@ -26,11 +26,10 @@ These links are private until shared.
 
 A small web app that puts the notes on your phone: this week's rhythm, the next dated milestones, every note in `notes/` (callouts, tables and diagrams included), and links to the live graphics. Once opened, it works with no signal.
 
-**Publish it:** in the repo's Settings → Pages, set *Source* to **GitHub Actions**. Every push to `main` then rebuilds and publishes the app (`.github/workflows/pages.yml`).
+**Publish it on Vercel:** at vercel.com → Add New → Project, import this repo and click Deploy. `vercel.json` already sets the build (`npm run build`, output `dist`). Every push to `main` redeploys. This works for private repos on the free plan.
 
-**Or publish on Vercel:** at vercel.com → Add New → Project, import this repo and click Deploy. `vercel.json` already sets the build (`npm run build`, output `dist`). Every push to `main` redeploys. This works for private repos on the free plan.
-
-**Install it:** open the Pages link on your phone.
+**Install it:** open the Vercel link on your phone or computer.
+- Windows / Mac: open it in Edge or Chrome and click **Install app** (or the install icon in the address bar).
 - Android / Chrome / Edge: tap **Install app** in the top bar.
 - iPhone / iPad: open the link in Safari, tap **Install app**, then follow the steps (Share → Add to Home Screen).
 
