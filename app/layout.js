@@ -515,9 +515,13 @@ function fenceRun(a, b, style, h, t) {
   };
   const posts = (step, color, w, top = h) => every(step, 400, (sv) => ln(sv, 0, sv, top, color, w, 'stroke-linecap="round"'));
   const hit = plane(0, h, 'transparent'); // easy to tap even where the fence is only wires
+  // A footprint on the ground keeps every fence visible and tappable in Plan view.
+  const foot = `<polygon points="${pts(slabAround(a, b, Math.max(t, 0.3)).map((v) => proj(v[0], v[1], 0.02)))}" fill="transparent"/>`;
+  return foot + fenceBody();
+  function fenceBody() {
   switch (style) {
     case 'wood':
-      return plane(0.05, h, '#9A7652') + every(0.3, 300, (sv) => ln(sv, 0.05, sv, h, '#7E5E40', 0.03 * S))
+      return plane(0.05, h, '#9A7652') + ln(0, 0.3, L, 0.3, '#7E5E40', 0.06 * S) + ln(0, h - 0.2, L, h - 0.2, '#7E5E40', 0.06 * S) + every(0.3, 300, (sv) => ln(sv, 0.05, sv, h, '#7E5E40', 0.03 * S))
         + posts(2.4, '#6B4A2E', 0.16 * S, h + 0.1);
     case 'barbed':
       return hit + posts(2.5, '#7A5A3C', 0.13 * S)
@@ -528,7 +532,8 @@ function fenceRun(a, b, style, h, t) {
         + every(4, 200, (sv) => [0.3, 0.62, 0.95].map((z) => { const [x, y] = at(sv, z); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${0.06 * S}" fill="#FFFFFF"/>`; }).join(''));
     case 'chain': {
       let mesh = '';
-      for (let s0 = -h; s0 < L; s0 += 0.5) {
+      const meshStep = Math.max(0.5, (L + h) / 300);
+      for (let s0 = -h; s0 < L; s0 += meshStep) {
         const a0 = Math.max(s0, 0), a1 = Math.min(s0 + h, L);
         if (a1 > a0) mesh += ln(a0, a0 - s0, a1, a1 - s0, '#8E989E', 0.02 * S, 'opacity=".7"');
         const b0 = Math.max(s0, 0), b1 = Math.min(s0 + h, L);
@@ -561,6 +566,7 @@ function fenceRun(a, b, style, h, t) {
     default:
       return plane(0, h, '#8A6A4A');
   }
+  }
 }
 
 // A fence item runs along the long side of its footprint.
@@ -577,25 +583,44 @@ function fenceItemSVG(T, r) {
 
 // The boundary fence follows every side of the land. Sides facing away are drawn
 // before the items, sides facing the viewer after them.
-function boundaryFence(front) {
+// Move every corner of the land inward by k, mitred so neighbouring sides still meet
+// (no gaps at inside corners, no overhang at outside corners).
+function insetCorners(p, k) {
+  const n = p.length;
+  const normal = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[1] - a[1]) / L, -(b[0] - a[0]) / L]; };
+  return p.map((v, i) => {
+    const n1 = normal(p[(i - 1 + n) % n], v), n2 = normal(v, p[(i + 1) % n]);
+    const denom = 1 + n1[0] * n2[0] + n1[1] * n2[1];
+    let mx = n1[0] + n2[0], my = n1[1] + n2[1];
+    let f = denom > 1e-6 ? k / denom : k;
+    // Very sharp corners: cap the mitre so the fence doesn't shoot off.
+    if (Math.hypot(mx * f, my * f) > 4 * k) { const L = Math.hypot(mx, my) || 1; mx /= L; my /= L; f = 4 * k; }
+    return [v[0] - mx * f, v[1] - my * f];
+  });
+}
+
+// One drawable per side of the land, placed into the same back-to-front sort as items.
+function boundarySides() {
   const style = st.plot.fence;
-  if (!style || !FENCE_STYLES[style]) return '';
+  if (!style || !Object.hasOwn(FENCE_STYLES, style)) return [];
   const F = FENCE_STYLES[style];
   const p = st.plot.pts;
-  let out = '';
+  const q = insetCorners(p, F.t / 2 + 0.05);
+  const sides = [];
   for (let i = 0; i < p.length; i++) {
-    const a = p[i], b = p[(i + 1) % p.length];
+    const a = q[i], b = q[(i + 1) % q.length];
     const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    if (L < E) continue;
-    // Pull the fence a little inside the land so it sits on the grass, not the edge.
-    const nx = (b[1] - a[1]) / L, ny = -(b[0] - a[0]) / L; // outward normal
-    const k = F.t / 2 + 0.05;
-    const aa = [a[0] - nx * k, a[1] - ny * k], bb = [b[0] - nx * k, b[1] - ny * k];
-    const isFront = facing(nx, ny).k > 0;
-    if (isFront !== front) continue;
-    out += fenceRun(aa, bb, style, F.h, F.t);
+    if (L < 0.05) continue;
+    const P = p[i], Q = p[(i + 1) % p.length];
+    const PL = Math.hypot(Q[0] - P[0], Q[1] - P[1]) || 1;
+    const n = [(Q[1] - P[1]) / PL, -(Q[0] - P[0]) / PL]; // outward normal
+    // Draw from the far end so posts overlap the right way.
+    let [s0, s1] = [a, b];
+    const [ar, as] = rot2(a[0], a[1]), [br, bs] = rot2(b[0], b[1]);
+    if (ar + as > br + bs) [s0, s1] = [b, a];
+    sides.push({ side: true, a, b, n, L, svg: () => `<g class="bfence">${fenceRun(s0, s1, style, F.h, F.t)}</g>` });
   }
-  return out ? `<g class="bfence">${out}</g>` : '';
+  return sides;
 }
 
 function perimeter() {
@@ -689,8 +714,18 @@ function fits(it) {
     if (o.id === it.id) return false;
     const O = TYPES[o.type];
     if (!isSolid(O)) return false;
-    if (fenceLike && O.kind === 'fence' && O.style) return false; // fences can meet and cross at corners
-    return overlap(r, rectOf(o));
+    const ro = rectOf(o);
+    if (fenceLike && O.kind === 'fence' && O.style) {
+      // Fences may cross and join end to end, and a gate may sit in a fence line,
+      // but two fences can't run along each other in the same place.
+      if (!overlap(r, ro)) return false;
+      if ((T.style === 'gate') !== (O.style === 'gate')) return false;
+      const alongA = r.x1 - r.x0 >= r.y1 - r.y0, alongB = ro.x1 - ro.x0 >= ro.y1 - ro.y0;
+      if (alongA !== alongB) return false;
+      const shared = alongA ? Math.min(r.x1, ro.x1) - Math.max(r.x0, ro.x0) : Math.min(r.y1, ro.y1) - Math.max(r.y0, ro.y0);
+      return shared > 0.5 + E;
+    }
+    return overlap(r, ro);
   });
 }
 function snapCenter(it, x, y) {
@@ -716,14 +751,34 @@ function findSpot(it, x, y) {
 // (the viewer looks from +rx+ry), so "A is behind B" is decided per pair from the
 // rotated footprints, then resolved with a topological sort. The centre depth only
 // breaks ties, so a long fence in front of a hut is drawn after the hut.
-function depthOrder(items) {
-  const n = items.length;
-  const boxes = items.map((it) => {
-    const c = cornersOf(rectOf(it)).map((p) => rot2(p[0], p[1]));
-    const xs = c.map((p) => p[0]), ys = c.map((p) => p[1]);
-    const [cx, cy] = rot2(it.x, it.y);
-    return { it, rx0: Math.min(...xs), rx1: Math.max(...xs), ry0: Math.min(...ys), ry1: Math.max(...ys), k: cx + cy };
-  });
+// Boundary-fence sides take part too: a side is drawn after the items on its inner
+// side when it faces the viewer, and before them when it faces away. Items beyond the
+// side's ends are left to the centre-depth tie-break.
+function sideVsItem(sd, B) {
+  const ux = (sd.b[0] - sd.a[0]) / sd.L, uy = (sd.b[1] - sd.a[1]) / sd.L;
+  const it = B.it;
+  const half = Math.max(it.w, it.d) / 2;
+  const t = (it.x - sd.a[0]) * ux + (it.y - sd.a[1]) * uy;
+  if (t < -half || t > sd.L + half) return 0;
+  const inner = (it.x - sd.a[0]) * sd.n[0] + (it.y - sd.a[1]) * sd.n[1] < 0;
+  const front = facing(sd.n[0], sd.n[1]).k > 0;
+  return front === inner ? 1 : -1; // 1: item first, -1: side first
+}
+function depthOrder(items, sides = []) {
+  const entries = [
+    ...items.map((it) => {
+      const c = cornersOf(rectOf(it)).map((p) => rot2(p[0], p[1]));
+      const xs = c.map((p) => p[0]), ys = c.map((p) => p[1]);
+      const [cx, cy] = rot2(it.x, it.y);
+      return { it, rx0: Math.min(...xs), rx1: Math.max(...xs), ry0: Math.min(...ys), ry1: Math.max(...ys), k: cx + cy };
+    }),
+    ...sides.map((sd) => {
+      const [mx, my] = rot2((sd.a[0] + sd.b[0]) / 2, (sd.a[1] + sd.b[1]) / 2);
+      return { sd, k: mx + my };
+    }),
+  ];
+  const boxes = entries;
+  const n = entries.length;
   const after = Array.from({ length: n }, () => []);
   const indeg = new Array(n).fill(0);
   const T = 1e-4;
@@ -731,6 +786,18 @@ function depthOrder(items) {
     for (let b = a + 1; b < n; b++) {
       const A = boxes[a], B = boxes[b];
       let first = -1;
+      if (A.sd || B.sd) {
+        if (A.sd && B.sd) continue;
+        const r = A.sd ? sideVsItem(A.sd, B) : -sideVsItem(B.sd, A);
+        // r is from the side's point of view when A is the side: 1 = item (B) first.
+        if (A.sd) { if (r === 1) first = b; else if (r === -1) first = a; }
+        else { if (r === -1) first = a; else if (r === 1) first = b; }
+        if (first < 0) continue;
+        const second = first === a ? b : a;
+        after[first].push(second);
+        indeg[second]++;
+        continue;
+      }
       if (A.rx1 <= B.rx0 + T) first = a;
       else if (B.rx1 <= A.rx0 + T) first = b;
       else if (A.ry1 <= B.ry0 + T) first = a;
@@ -747,11 +814,11 @@ function depthOrder(items) {
     let pick = -1;
     for (let i = 0; i < n; i++) if (!done[i] && indeg[i] === 0 && (pick < 0 || boxes[i].k < boxes[pick].k)) pick = i;
     if (pick < 0) { // cycle (only possible mid-rotation): fall back to centre depth
-      boxes.map((b, i) => i).filter((i) => !done[i]).sort((x, y) => boxes[x].k - boxes[y].k).forEach((i) => out.push(boxes[i].it));
+      boxes.map((b, i) => i).filter((i) => !done[i]).sort((x, y) => boxes[x].k - boxes[y].k).forEach((i) => out.push(boxes[i].sd || boxes[i].it));
       return out;
     }
     done[pick] = true;
-    out.push(boxes[pick].it);
+    out.push(boxes[pick].sd || boxes[pick].it);
     for (const j of after[pick]) indeg[j]--;
   }
   return out;
@@ -813,11 +880,9 @@ function render() {
 
   const zones = st.items.filter((i) => !isSolid(TYPES[i.type]))
     .sort((a, b) => b.w * b.d - a.w * a.d);
-  const solids = depthOrder(st.items.filter((i) => isSolid(TYPES[i.type])));
+  const solids = depthOrder(st.items.filter((i) => isSolid(TYPES[i.type])), boundarySides());
   for (const it of zones) out.push(itemSVG(it, fx(it)));
-  out.push(boundaryFence(false));
-  for (const it of solids) out.push(itemSVG(it, fx(it)));
-  out.push(boundaryFence(true));
+  for (const it of solids) out.push(it.side ? it.svg() : itemSVG(it, fx(it)));
 
   // Selection outline + resize handles
   const sel = st.items.find((i) => i.id === ui.sel);
@@ -1065,7 +1130,7 @@ function commitNew(it) {
   pushUndo();
   st.items.push(it);
   celebrate(it);
-  select(it.id);
+  select(it.id, { reveal: true });
   saveSoon();
 }
 function celebrate(it) {
@@ -1133,10 +1198,41 @@ function deleteSel() {
   select(null);
   saveSoon();
 }
-function select(id) {
+function select(id, { reveal = false } = {}) {
   ui.sel = id;
   renderInspector();
   requestRender();
+  if (reveal && id) requestAnimationFrame(() => requestAnimationFrame(() => revealSelected(id)));
+}
+
+// If the info card hides the selected item or its resize knob, slide the view up.
+function revealSelected(id) {
+  if (!els || !ui || ui.sel !== id || ui.drag || ui.animating) return;
+  const g = els.world.querySelector(`[data-id="${CSS.escape(id)}"]`);
+  if (!g || els.inspector.hidden) return;
+  let bottom = g.getBoundingClientRect().bottom;
+  let top = g.getBoundingClientRect().top;
+  els.world.querySelectorAll('.handle').forEach((h) => { const r = h.getBoundingClientRect(); bottom = Math.max(bottom, r.bottom); top = Math.min(top, r.top); });
+  const cardTop = els.inspector.getBoundingClientRect().top;
+  const stageTop = els.svg.getBoundingClientRect().top;
+  let dy = cardTop - 16 - bottom;
+  if (dy >= 0) return;
+  dy = Math.max(dy, stageTop + 56 - top); // don't push it off the top
+  if (dy >= 0) return;
+  // A gentle slide that never blocks taps or drags (unlike camera turns).
+  if (reduceMotion()) { cam.ty += dy; requestRender(); saveSoon(); return; }
+  const t0 = performance.now();
+  let done = 0;
+  const step = (now) => {
+    if (!ui || ui.drag || ui.pinch) return; // the user took over
+    const k = Math.min(1, (now - t0) / 300);
+    const e = 1 - Math.pow(1 - k, 3);
+    cam.ty += dy * (e - done);
+    done = e;
+    render();
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 function sizeText(it) {
@@ -1407,12 +1503,14 @@ function onStageMove(e) {
     const r0 = rectOf(d.orig);
     const swapped = (it.rot / 90) % 2 === 1;
     if (d.axis === 'x') {
-      const ew = Math.max(SNAP, Math.min(400, snap(r0.x1 - r0.x0 + wx - d.w0[0])));
-      if (swapped) it.d = ew; else it.w = ew;
+      const minX = TYPES[it.type].resize === 'long' ? r0.y1 - r0.y0 + SNAP : SNAP;
+      const ew = Math.max(minX, Math.min(400, snap(r0.x1 - r0.x0 + wx - d.w0[0])));
+      if (swapped) it.d = Math.round(ew * 1000) / 1000; else it.w = Math.round(ew * 1000) / 1000;
       it.x = r0.x0 + ew / 2;
     } else {
-      const ed = Math.max(SNAP, Math.min(400, snap(r0.y1 - r0.y0 + wy - d.w0[1])));
-      if (swapped) it.w = ed; else it.d = ed;
+      const minY = TYPES[it.type].resize === 'long' ? r0.x1 - r0.x0 + SNAP : SNAP;
+      const ed = Math.max(minY, Math.min(400, snap(r0.y1 - r0.y0 + wy - d.w0[1])));
+      if (swapped) it.w = Math.round(ed * 1000) / 1000; else it.d = Math.round(ed * 1000) / 1000;
       it.y = r0.y0 + ed / 2;
     }
     d.valid = fits(it);
@@ -1469,8 +1567,8 @@ function onStageUp(e) {
     return;
   }
   if (ui.shape && d.mode === 'pan-pending') { ui.shape.selV = null; requestRender(); return; }
-  if (d.mode === 'move-pending') select(d.id);
-  else if (d.mode === 'pan-pending') select(d.tap);
+  if (d.mode === 'move-pending') select(d.id, { reveal: true });
+  else if (d.mode === 'pan-pending') select(d.tap, { reveal: true });
   else if (d.mode === 'move' || d.mode === 'resize') {
     const it = st.items.find((i) => i.id === d.id);
     if (it && !fits(it)) {
