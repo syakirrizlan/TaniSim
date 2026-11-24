@@ -23,19 +23,29 @@ const CATALOG = [
     { type: 'banana', name: 'Banana clump', kind: 'tree', style: 'banana', w: 3, d: 3, h: 3.2, canopy: '#7DBA4A' },
     { type: 'coconut', name: 'Coconut palm', kind: 'tree', style: 'palm', w: 4, d: 4, h: 7, canopy: '#5E9A3A' },
     { type: 'rubber', name: 'Rubber tree', kind: 'tree', style: 'round', w: 5, d: 5, h: 6, canopy: '#2F6640' },
+    { type: 'durian', name: 'Durian tree', kind: 'tree', style: 'round', w: 7, d: 7, h: 9, canopy: '#46743A' },
+    { type: 'bamboo', name: 'Bamboo clump', kind: 'tree', style: 'bamboo', w: 3, d: 3, h: 7, canopy: '#7FAF4A' },
     { type: 'pandan', name: 'Pandan row', kind: 'hedge', w: 1, d: 5, h: 0.9, color: '#4E9A4A', resize: true },
   ] },
   { cat: 'Buildings', items: [
     { type: 'hut', name: 'Hut', kind: 'building', w: 4, d: 3, h: 2.6, wall: '#E7D9C1', roof: '#8C9BA5' },
+    { type: 'greenhouse', name: 'Greenhouse', kind: 'greenhouse', w: 5, d: 10, h: 2.4, resize: true },
+    { type: 'shadehouse', name: 'Shade-net house', kind: 'shadehouse', w: 4, d: 6, h: 2.2, resize: true },
+    { type: 'pondok', name: 'Pondok (open hut)', kind: 'pondok', w: 3, d: 3, h: 2.3 },
     { type: 'stall', name: 'Farm stall', kind: 'building', w: 3, d: 2, h: 2.2, wall: '#DCC9B2', roof: '#C8302A' },
     { type: 'rabbitry', name: 'Rabbitry', kind: 'building', w: 5, d: 3, h: 2.4, wall: '#EFE6D6', roof: '#8C9BA5' },
     { type: 'coop', name: 'Chicken coop', kind: 'building', w: 3, d: 2, h: 1.8, wall: '#C99E6B', roof: '#7B4B2A' },
     { type: 'duck', name: 'Duck house', kind: 'building', w: 2, d: 2, h: 1.3, wall: '#D8B98A', roof: '#5E7F8F' },
     { type: 'shed', name: 'Tool shed', kind: 'building', w: 2.5, d: 2, h: 2.2, wall: '#B9A88C', roof: '#6C7A82' },
+    { type: 'mushroom', name: 'Mushroom house', kind: 'building', w: 4, d: 6, h: 2.4, wall: '#E3D7C0', roof: '#5E6B5E', resize: true },
+    { type: 'goat', name: 'Goat shed', kind: 'building', w: 4, d: 3, h: 2.2, wall: '#B58A5C', roof: '#6E7F86' },
     { type: 'nursery', name: 'Nursery bench', kind: 'box', w: 3, d: 1, h: 0.9, color: '#B08A5E', top: '#7DAA5E' },
   ] },
   { cat: 'Water', items: [
+    { type: 'well', name: 'Well', kind: 'well', w: 1.6, d: 1.6, h: 2.6 },
     { type: 'pond', name: 'Fish pond', kind: 'water', w: 10, d: 8, resize: true },
+    { type: 'fishtank', name: 'Tarpaulin fish tank', kind: 'cyl', w: 3, d: 3, h: 1, color: '#2F6FA8', top: '#4F9BC9', water: true },
+    { type: 'tank', name: 'Water tank', kind: 'cyl', w: 2, d: 2, h: 2, color: '#3E5A48', top: '#56705F' },
     { type: 'drain', name: 'Drain', kind: 'water', w: 0.6, d: 10, resize: true },
     { type: 'ibc', name: 'IBC tank', kind: 'box', w: 1.2, d: 1, h: 1.2, color: '#DCE3E6', top: '#F1F4F5' },
   ] },
@@ -47,6 +57,7 @@ const CATALOG = [
     { type: 'path', name: 'Path', kind: 'zone', w: 1.2, d: 10, fill: '#D9C7A3', resize: true },
     { type: 'road', name: 'Village road', kind: 'zone', w: 5, d: 40, fill: '#7B7F82', road: true, resize: true },
     { type: 'fence', name: 'Fence', kind: 'fence', w: 0.15, d: 10, h: 1.2, color: '#8A6A4A', resize: true },
+    { type: 'gate', name: 'Gate', kind: 'fence', w: 0.2, d: 3, h: 1.6, color: '#5E6B73' },
     { type: 'compost', name: 'Compost bays', kind: 'box', w: 3, d: 1.5, h: 1, color: '#6B4F35', top: '#4E3A27' },
     { type: 'solar', name: 'Solar panel', kind: 'box', w: 2, d: 1, h: 0.12, z0: 0.8, color: '#33506E', top: '#2B4A6B' },
     { type: 'sensor', name: 'Sensor (ESP32)', kind: 'box', w: 0.5, d: 0.5, h: 1.2, color: '#C8302A', top: '#E5574F' },
@@ -61,7 +72,9 @@ const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------------- State ---------------- */
-let st = { plot: { w: 80, h: 66 }, items: [] };
+const rectPts = (w, h) => [[0, 0], [w, 0], [w, h], [0, h]];
+let st = { plot: { pts: rectPts(80, 66) }, items: [] };
+let pivot = [40, 33]; // camera turns around this point; changed only by setPivot()
 let cam = { t: 1, angle: 0, zoom: 1, tx: 0, ty: 0 };
 let ui = null;
 let undoStack = [];
@@ -87,13 +100,13 @@ const cornersOf = (r) => [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]
 const inset = (r, k) => ({ x0: r.x0 + k, y0: r.y0 + k, x1: r.x1 - k, y1: r.y1 - k });
 
 function rot2(x, y) {
-  const cx = st.plot.w / 2, cy = st.plot.h / 2;
+  const [cx, cy] = pivot;
   const a = (cam.angle * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
   const dx = x - cx, dy = y - cy;
   return [dx * c - dy * s, dx * s + dy * c];
 }
 function unrot2(rx, ry) {
-  const cx = st.plot.w / 2, cy = st.plot.h / 2;
+  const [cx, cy] = pivot;
   const a = (-cam.angle * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
   return [rx * c - ry * s + cx, rx * s + ry * c + cy];
 }
@@ -118,6 +131,68 @@ function clientToWorld(cx, cy) {
   const r = els.svg.getBoundingClientRect();
   return unproj((cx - r.left - cam.tx) / cam.zoom, (cy - r.top - cam.ty) / cam.zoom);
 }
+/* Land polygon helpers. Vertices go the same way round as cornersOf (positive signed area). */
+function polyArea(p) {
+  let a = 0;
+  for (let i = 0; i < p.length; i++) { const q = p[(i + 1) % p.length]; a += p[i][0] * q[1] - q[0] * p[i][1]; }
+  return a / 2;
+}
+function polyBox(p) {
+  const xs = p.map((v) => v[0]), ys = p.map((v) => v[1]);
+  return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+}
+function pointInPoly(x, y, p) {
+  let inside = false;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+    const [xi, yi] = p[i], [xj, yj] = p[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+const orient = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+function segsCross(a, b, c, d) {
+  const o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+  return o1 * o2 < -1e-12 && o3 * o4 < -1e-12;
+}
+// A rectangle is on the land if its (slightly shrunk) corners are inside and no land edge cuts through it.
+function rectInPoly(r, p) {
+  const q = inset(r, 1e-3);
+  const c = cornersOf(q);
+  if (!c.every(([x, y]) => pointInPoly(x, y, p))) return false;
+  if (p.some(([x, y]) => x > q.x0 && x < q.x1 && y > q.y0 && y < q.y1)) return false;
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length];
+    for (let k = 0; k < 4; k++) if (segsCross(a, b, c[k], c[(k + 1) % 4])) return false;
+  }
+  return true;
+}
+function selfCrosses(p) {
+  const n = p.length;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (j === i + 1 || (i === 0 && j === n - 1)) continue; // neighbouring sides share a corner
+      if (segsCross(p[i], p[(i + 1) % n], p[j], p[(j + 1) % n])) return true;
+    }
+  }
+  // Two corners on the same spot also count as broken.
+  for (let i = 0; i < n; i++) if (Math.hypot(p[i][0] - p[(i + 1) % n][0], p[i][1] - p[(i + 1) % n][1]) < 0.25) return true;
+  return false;
+}
+function circlePoly(cx, cy, R, n = 20) {
+  const out = [];
+  for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; out.push([cx + Math.cos(a) * R, cy + Math.sin(a) * R]); }
+  return out;
+}
+// Keep the picture still on screen when the turning point moves.
+function setPivot(x, y) {
+  if (!els) { pivot = [x, y]; return; }
+  const before = proj(0, 0, 0);
+  pivot = [x, y];
+  const after = proj(0, 0, 0);
+  cam.tx += (before[0] - after[0]) * cam.zoom;
+  cam.ty += (before[1] - after[1]) * cam.zoom;
+}
+
 const pts = (list) => list.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
 
 function shade(hex, f) {
@@ -127,22 +202,78 @@ function shade(hex, f) {
 }
 
 /* ---------------- Drawing ---------------- */
-function box(r, z0, h, top, side) {
+// Camera-space facing of a horizontal normal: > 0 means it faces the viewer.
+function facing(nx, ny) {
+  const a = (cam.angle * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+  const rx = nx * ca - ny * sa, ry = nx * sa + ny * ca;
+  return { k: rx + ry, side: rx - ry };
+}
+// Extrude a footprint polygon (any shape, same winding as cornersOf) from z0 up by h.
+// `all` draws the hidden back faces too (for see-through walls).
+function prism(poly, z0, h, top, side, extra = '', all = false) {
   let s = '';
-  const c = cornersOf(r);
   if (cam.t > 0.01 && h > 0.001) {
-    const a = (cam.angle * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
-    const normals = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    for (let i = 0; i < 4; i++) {
-      const [nx, ny] = normals[i];
-      const rx = nx * ca - ny * sa, ry = nx * sa + ny * ca;
-      if (rx + ry <= 0.001) continue; // faces away from the viewer
-      const p = c[i], q = c[(i + 1) % 4];
-      const f = rx - ry > 0 ? 0.7 : 0.86;
-      s += `<polygon points="${pts([proj(p[0], p[1], z0), proj(q[0], q[1], z0), proj(q[0], q[1], z0 + h), proj(p[0], p[1], z0 + h)])}" fill="${shade(side, f)}"/>`;
+    const faces = [];
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i], q = poly[(i + 1) % poly.length];
+      const dx = q[0] - p[0], dy = q[1] - p[1];
+      const len = Math.hypot(dx, dy);
+      if (len < E) continue;
+      const f = facing(dy / len, -dx / len);
+      if (f.k <= 0.001 && !all) continue; // faces away from the viewer
+      const light = 0.78 - 0.08 * Math.max(-1, Math.min(1, f.side / 1.414));
+      const [mx, my] = rot2((p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+      faces.push({ d: mx + my, svg: `<polygon points="${pts([proj(p[0], p[1], z0), proj(q[0], q[1], z0), proj(q[0], q[1], z0 + h), proj(p[0], p[1], z0 + h)])}" fill="${shade(side, light)}" ${extra}/>` });
+    }
+    faces.sort((a, b) => a.d - b.d);
+    s += faces.map((f) => f.svg).join('');
+  }
+  s += `<polygon points="${pts(poly.map((p) => proj(p[0], p[1], z0 + h)))}" fill="${top}" ${extra}/>`;
+  return s;
+}
+const box = (r, z0, h, top, side, extra = '', all = false) => prism(cornersOf(r), z0, h, top, side, extra, all);
+// All side walls (front and back), no top: for see-through structures with a roof.
+const walls = (poly, z0, h, side, extra = '') => prism(poly, z0, h, 'none', side, extra, true).replace(/<polygon[^>]*fill="none"[^>]*\/>$/, '');
+
+const roofRise = (r) => Math.min(1.4, 0.35 * Math.min(r.x1 - r.x0, r.y1 - r.y0));
+// Pitched roof over rectangle r: eaves at height z, ridge along the long side.
+function gable(r, z, color, endColor, extra = '') {
+  const rise = roofRise(r);
+  const zr = z + rise;
+  const alongX = r.x1 - r.x0 >= r.y1 - r.y0;
+  const P = (list) => pts(list.map((v) => proj(v[0], v[1], v[2])));
+  let planes, ends;
+  if (alongX) {
+    const ym = (r.y0 + r.y1) / 2;
+    planes = [
+      { n: [0, -1], v: [[r.x0, r.y0, z], [r.x1, r.y0, z], [r.x1, ym, zr], [r.x0, ym, zr]] },
+      { n: [0, 1], v: [[r.x0, r.y1, z], [r.x1, r.y1, z], [r.x1, ym, zr], [r.x0, ym, zr]] },
+    ];
+    ends = [
+      { n: [-1, 0], v: [[r.x0, r.y0, z], [r.x0, r.y1, z], [r.x0, ym, zr]] },
+      { n: [1, 0], v: [[r.x1, r.y0, z], [r.x1, r.y1, z], [r.x1, ym, zr]] },
+    ];
+  } else {
+    const xm = (r.x0 + r.x1) / 2;
+    planes = [
+      { n: [-1, 0], v: [[r.x0, r.y0, z], [r.x0, r.y1, z], [xm, r.y1, zr], [xm, r.y0, zr]] },
+      { n: [1, 0], v: [[r.x1, r.y0, z], [r.x1, r.y1, z], [xm, r.y1, zr], [xm, r.y0, zr]] },
+    ];
+    ends = [
+      { n: [0, -1], v: [[r.x0, r.y0, z], [r.x1, r.y0, z], [xm, r.y0, zr]] },
+      { n: [0, 1], v: [[r.x0, r.y1, z], [r.x1, r.y1, z], [xm, r.y1, zr]] },
+    ];
+  }
+  planes.forEach((pl) => { pl.f = facing(pl.n[0], pl.n[1]); });
+  planes.sort((a, b) => a.f.k - b.f.k);
+  let s = `<polygon points="${P(planes[0].v)}" fill="${shade(color, 0.82)}" ${extra}/>`;
+  if (cam.t > 0.01) {
+    for (const en of ends) {
+      const f = facing(en.n[0], en.n[1]);
+      if (f.k > 0.001) s += `<polygon points="${P(en.v)}" fill="${shade(endColor, 0.8)}" ${extra}/>`;
     }
   }
-  s += `<polygon points="${pts(c.map((p) => proj(p[0], p[1], z0 + h)))}" fill="${top}"/>`;
+  s += `<polygon points="${P(planes[1].v)}" fill="${color}" ${extra}/>`;
   return s;
 }
 
@@ -213,14 +344,57 @@ function cropSVG(T, r) {
 }
 
 function buildingSVG(T, r) {
-  let s = box(r, 0, T.h, T.wall, T.wall);
-  const rr = inset(r, -0.25);
-  s += box(rr, T.h, 0.18, T.roof, T.roof);
-  const alongX = r.x1 - r.x0 >= r.y1 - r.y0;
-  const z = T.h + 0.18;
-  const l = alongX ? [proj(rr.x0, (r.y0 + r.y1) / 2, z), proj(rr.x1, (r.y0 + r.y1) / 2, z)]
-    : [proj((r.x0 + r.x1) / 2, rr.y0, z), proj((r.x0 + r.x1) / 2, rr.y1, z)];
-  return s + lineTag(l, shade(T.roof, 0.75), 0.15 * S, 'stroke-linecap="round"');
+  return box(r, 0, T.h, T.wall, T.wall) + gable(inset(r, -0.25), T.h, T.roof, T.wall);
+}
+
+function floorPlants(r, z = 0.05) {
+  let s = '';
+  const ri = inset(r, 0.5);
+  if (ri.x1 <= ri.x0 || ri.y1 <= ri.y0) return s;
+  for (const l of rowsAlongLongAxis(ri, z, 0.9, 0.2)) s += lineTag(l, '#5DAA4B', 0.32 * S, 'stroke-linecap="round" stroke-dasharray="3 5"');
+  return s;
+}
+
+function greenhouseSVG(T, r) {
+  const glass = 'fill-opacity=".42" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="' + 0.06 * S + '"';
+  return `<polygon points="${pts(cornersOf(r).map((p) => proj(p[0], p[1], 0.02)))}" fill="#C9B48E"/>` + floorPlants(r)
+    + walls(cornersOf(r), 0, T.h, '#CFE6EC', glass)
+    + gable(r, T.h, '#E8F5F7', '#D6ECF1', glass);
+}
+
+function shadehouseSVG(T, r) {
+  const net = 'fill-opacity=".38" stroke="#24382B" stroke-opacity=".5" stroke-width="' + 0.05 * S + '"';
+  return `<polygon points="${pts(cornersOf(r).map((p) => proj(p[0], p[1], 0.02)))}" fill="#BCA98A"/>` + floorPlants(r)
+    + box(r, 0, T.h, '#2F4F3A', '#3C5E46', net, true);
+}
+
+function postsSVG(r, z0, z1, k = 0.15) {
+  const ri = inset(r, k);
+  return cornersOf(ri).map((c) => lineTag([proj(c[0], c[1], z0), proj(c[0], c[1], z1)], '#6B4A2E', 0.16 * S, 'stroke-linecap="round"')).join('');
+}
+
+function pondokSVG(T, r) {
+  const deck = inset(r, 0.1);
+  return box(deck, 0, 0.5, '#B38A5A', '#8E6A44') + postsSVG(r, 0.5, T.h) + gable(inset(r, -0.3), T.h, '#A8875A', '#8C6B42');
+}
+
+function cylSVG(T, it, r) {
+  const R = Math.min(r.x1 - r.x0, r.y1 - r.y0) / 2 * 0.96;
+  const z0 = T.z0 || 0;
+  let s = prism(circlePoly(it.x, it.y, R), z0, T.h, T.top, T.color);
+  if (T.water) s += `<polygon points="${pts(circlePoly(it.x, it.y, R * 0.86).map((p) => proj(p[0], p[1], z0 + T.h + 0.01)))}" fill="#4F9BC9" stroke="#A9D3EC" stroke-width="${0.08 * S}"/>`;
+  else s += `<polygon points="${pts(circlePoly(it.x, it.y, R * 0.35, 12).map((p) => proj(p[0], p[1], z0 + T.h + 0.01)))}" fill="${shade(T.top, 0.8)}"/>`;
+  return s;
+}
+
+function wellSVG(T, it) {
+  let s = prism(circlePoly(it.x, it.y, 0.7), 0, 0.8, '#B9B3A8', '#9C968B');
+  s += `<polygon points="${pts(circlePoly(it.x, it.y, 0.45, 16).map((p) => proj(p[0], p[1], 0.81)))}" fill="#2F5F7A"/>`;
+  s += lineTag([proj(it.x - 0.6, it.y, 0.8), proj(it.x - 0.6, it.y, 2.1)], '#6B4A2E', 0.14 * S, 'stroke-linecap="round"');
+  s += lineTag([proj(it.x + 0.6, it.y, 0.8), proj(it.x + 0.6, it.y, 2.1)], '#6B4A2E', 0.14 * S, 'stroke-linecap="round"');
+  s += lineTag([proj(it.x - 0.6, it.y, 1.75), proj(it.x + 0.6, it.y, 1.75)], '#8A6A4A', 0.1 * S);
+  s += gable({ x0: it.x - 0.8, y0: it.y - 0.65, x1: it.x + 0.8, y1: it.y + 0.65 }, 2.1, '#8C5A3C', '#7A4C32');
+  return s;
 }
 
 function star(cx, cy, R, r, n, rot = -Math.PI / 2) {
@@ -240,6 +414,7 @@ function treeSVG(T, it, r) {
     const a = (i / 16) * Math.PI * 2;
     shadow.push(proj(it.x + 0.35 + Math.cos(a) * R * 0.92, it.y + 0.35 + Math.sin(a) * R * 0.92, 0.01));
   }
+  if (T.style === 'bamboo') return bambooSVG(T, it, R);
   const crownZ = T.h * (T.style === 'palm' ? 0.92 : 0.7);
   const base = proj(it.x, it.y, 0), top = proj(it.x, it.y, crownZ);
   const rs = R * S * (1 - 0.12 * cam.t);
@@ -261,7 +436,26 @@ function treeSVG(T, it, r) {
   return s + '</g>';
 }
 
-function topZ(T) {
+function bambooSVG(T, it, R) {
+  let s = `<polygon points="${pts(circlePoly(it.x + 0.3, it.y + 0.3, R * 0.8, 14).map((p) => proj(p[0], p[1], 0.01)))}" fill="rgba(20,30,20,.2)"/>`;
+  const delay = `animation-delay:-${((performance.now() + it.y * 211) % 6000) / 1000}s`;
+  s += `<g class="sway" style="${delay}">`;
+  const culms = [[-0.5, -0.3, -1.1, -0.6], [0.3, -0.4, 0.8, -1], [0, 0.4, 0.2, 1.1], [-0.3, 0.2, -1, 0.7], [0.5, 0.3, 1.2, 0.5]];
+  for (const [bx, by, tx, ty] of culms) {
+    s += lineTag([proj(it.x + bx * R * 0.5, it.y + by * R * 0.5, 0), proj(it.x + tx * R * 0.6, it.y + ty * R * 0.6, T.h)], '#8DB255', 0.16 * S, 'stroke-linecap="round"');
+  }
+  for (const [, , tx, ty] of culms) {
+    const [cx, cy] = proj(it.x + tx * R * 0.6, it.y + ty * R * 0.6, T.h);
+    s += `<polygon points="${star(cx, cy, R * S * 0.42, R * S * 0.12, 6)}" fill="${T.canopy}" opacity=".9"/>`;
+  }
+  return s + '</g>';
+}
+
+function topZ(T, r) {
+  if (T.kind === 'building') return T.h + (r ? roofRise(inset(r, -0.25)) : 1);
+  if (T.kind === 'greenhouse') return T.h + (r ? roofRise(r) : 1);
+  if (T.kind === 'pondok') return T.h + (r ? roofRise(inset(r, -0.3)) : 1);
+  if (T.kind === 'well') return 2.6;
   if (T.kind === 'building') return T.h + 0.18;
   if (T.kind === 'tree') return T.h;
   if (T.kind === 'zone' || T.kind === 'water') return 0.05;
@@ -270,8 +464,9 @@ function topZ(T) {
 
 function labelSVG(it, T) {
   if (!it.label) return '';
-  const [x, y] = proj(it.x, it.y, topZ(T) + 0.05);
-  const fs = (T.kind === 'building' || T.kind === 'zone' || T.kind === 'water' ? 1.3 : 0.85) * S;
+  const [x, y] = proj(it.x, it.y, topZ(T, rectOf(it)) + 0.05);
+  const big = ['building', 'zone', 'water', 'greenhouse', 'shadehouse', 'pondok'].includes(T.kind);
+  const fs = (big ? 1.3 : 0.85) * S;
   return `<text class="lbl" x="${x.toFixed(1)}" y="${(y + fs * 0.35).toFixed(1)}" font-size="${fs}" text-anchor="middle" font-family="Barlow, Arial, sans-serif" font-weight="700" fill="#18241C" stroke="#FFFFFF" stroke-width="${fs * 0.28}" stroke-linejoin="round" paint-order="stroke">${esc(it.label)}</text>`;
 }
 
@@ -286,6 +481,11 @@ function itemBody(it) {
     case 'fence':
     case 'hedge': return box(r, 0, T.h, shade(T.color, 1.18), T.color);
     case 'building': return buildingSVG(T, r);
+    case 'greenhouse': return greenhouseSVG(T, r);
+    case 'shadehouse': return shadehouseSVG(T, r);
+    case 'pondok': return pondokSVG(T, r);
+    case 'cyl': return cylSVG(T, it, r);
+    case 'well': return wellSVG(T, it);
     case 'tree': return treeSVG(T, it, r);
     default: return '';
   }
@@ -298,7 +498,7 @@ function itemSVG(it, { cls = '', style = '' } = {}) {
 function itemBounds(it) {
   const T = TYPES[it.type];
   const r = rectOf(it);
-  const z = topZ(T);
+  const z = topZ(T, r);
   const list = cornersOf(r).flatMap((p) => [proj(p[0], p[1], 0), proj(p[0], p[1], z)]);
   if (T.kind === 'tree') {
     const R = (Math.min(r.x1 - r.x0, r.y1 - r.y0) / 2) * S;
@@ -309,8 +509,7 @@ function itemBounds(it) {
 }
 
 function plotBounds() {
-  const c = cornersOf({ x0: 0, y0: 0, x1: st.plot.w, y1: st.plot.h });
-  return c.flatMap((p) => [proj(p[0], p[1], 0), proj(p[0], p[1], -1.2)]);
+  return st.plot.pts.flatMap((p) => [proj(p[0], p[1], 0), proj(p[0], p[1], -1.2)]);
 }
 
 function bboxOf(list) {
@@ -321,12 +520,13 @@ function bboxOf(list) {
 
 /* ---------------- Rules ---------------- */
 const isSolid = (T) => T.kind !== 'zone';
+const onLand = (it) => !isSolid(TYPES[it.type]) || rectInPoly(rectOf(it), st.plot.pts);
 const overlap = (a, b) => a.x0 < b.x1 - E && b.x0 < a.x1 - E && a.y0 < b.y1 - E && b.y0 < a.y1 - E;
 function fits(it) {
   const T = TYPES[it.type];
   if (!isSolid(T)) return true;
   const r = rectOf(it);
-  if (r.x0 < -E || r.y0 < -E || r.x1 > st.plot.w + E || r.y1 > st.plot.h + E) return false;
+  if (!rectInPoly(r, st.plot.pts)) return false;
   return !st.items.some((o) => o.id !== it.id && isSolid(TYPES[o.type]) && overlap(r, rectOf(o)));
 }
 function snapCenter(it, x, y) {
@@ -412,25 +612,27 @@ function requestRender() {
 function render() {
   if (!els) return;
   const now = performance.now();
-  const W = st.plot.w, H = st.plot.h;
   const out = [];
-  const plotR = { x0: 0, y0: 0, x1: W, y1: H };
-  // Diorama slab: soil sides under the grass.
-  out.push(box(plotR, -1.2, 1.2, colors.grass, colors.soil));
-  // Grid
+  const land = st.plot.pts;
+  // Diorama slab: soil sides under the grass, in the land's real shape.
+  out.push(prism(land, -1.2, 1.2, colors.grass, colors.soil));
+  // Grid, clipped to the land
+  const lb = polyBox(land);
+  const gx0 = Math.floor(lb.x0), gx1 = Math.ceil(lb.x1), gy0 = Math.floor(lb.y0), gy1 = Math.ceil(lb.y1);
   const showMinor = cam.zoom * S >= 7;
   const gl = [];
-  for (let x = 0; x <= W + E; x += 1) {
-    const major = Math.round(x) % 5 === 0;
+  for (let x = gx0; x <= gx1; x += 1) {
+    const major = ((x % 5) + 5) % 5 === 0;
     if (!major && !showMinor) continue;
-    gl.push(lineTag([proj(x, 0), proj(x, H)], major ? colors.gridMajor : colors.grid, (major ? 1.2 : 0.8) / cam.zoom));
+    gl.push(lineTag([proj(x, gy0), proj(x, gy1)], major ? colors.gridMajor : colors.grid, (major ? 1.2 : 0.8) / cam.zoom));
   }
-  for (let y = 0; y <= H + E; y += 1) {
-    const major = Math.round(y) % 5 === 0;
+  for (let y = gy0; y <= gy1; y += 1) {
+    const major = ((y % 5) + 5) % 5 === 0;
     if (!major && !showMinor) continue;
-    gl.push(lineTag([proj(0, y), proj(W, y)], major ? colors.gridMajor : colors.grid, (major ? 1.2 : 0.8) / cam.zoom));
+    gl.push(lineTag([proj(gx0, y), proj(gx1, y)], major ? colors.gridMajor : colors.grid, (major ? 1.2 : 0.8) / cam.zoom));
   }
-  out.push(`<g class="grid">${gl.join('')}</g>`);
+  out.push(`<clipPath id="landclip"><polygon points="${pts(land.map((p) => proj(p[0], p[1], 0)))}"/></clipPath>`);
+  out.push(`<g class="grid" clip-path="url(#landclip)">${gl.join('')}</g>`);
 
   const fx = (it) => {
     const opts = {};
@@ -439,6 +641,7 @@ function render() {
     const sh = ui.shakes.get(it.id);
     if (sh && now - sh < 450) { opts.cls = 'shake'; opts.style = `animation-delay:-${Math.round(now - sh)}ms`; }
     if (ui.drag && ui.drag.id === it.id && ui.drag.mode !== 'pan') opts.cls = (opts.cls || '') + (ui.drag.valid === false ? ' bad' : ' lifted');
+    else if (!onLand(it)) opts.cls = (opts.cls || '') + ' bad';
     return opts;
   };
 
@@ -461,6 +664,8 @@ function render() {
       }
     }
   }
+
+  if (ui.shape) out.push(shapeOverlay());
 
   // Ghost while dragging from the tray
   if (ui.place && ui.place.over) {
@@ -485,11 +690,48 @@ function render() {
   renderStats();
 }
 
+function shapeOverlay() {
+  const p = st.plot.pts;
+  const z = 0.08;
+  const bad = ui.drag && ui.drag.mode === 'vertex' && ui.drag.valid === false;
+  let s = `<polygon class="land-edge${bad ? ' bad' : ''}" points="${pts(p.map((v) => proj(v[0], v[1], z)))}" fill="none" stroke-width="${3 / cam.zoom}"/>`;
+  const fs = 12 / cam.zoom;
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const [mx, my] = proj((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, z);
+    // Side length, pushed outward a little so it doesn't sit on the + knob.
+    const nx = (b[1] - a[1]) / (len || 1), ny = -(b[0] - a[0]) / (len || 1);
+    const [ox, oy] = proj((a[0] + b[0]) / 2 + nx, (a[1] + b[1]) / 2 + ny, z);
+    const ol = Math.hypot(ox - mx, oy - my) || 1;
+    const ux = (ox - mx) / ol, uy = (oy - my) / ol;
+    const txt = `${fmt(len)} m`;
+    const off = 14 / cam.zoom + Math.abs(ux) * (txt.length * fs * 0.3) + Math.abs(uy) * fs * 0.6;
+    const lx = mx + ux * off, ly = my + uy * off;
+    s += `<text class="edge-len" x="${lx.toFixed(1)}" y="${(ly + fs * 0.35).toFixed(1)}" font-size="${fs.toFixed(2)}" text-anchor="middle" font-family="Barlow, Arial, sans-serif" font-weight="700" fill="#18241C" stroke="#FFFFFF" stroke-width="${(fs * 0.3).toFixed(2)}" stroke-linejoin="round" paint-order="stroke">${txt}</text>`;
+    s += `<g class="mid-knob" data-mid="${i}"><circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${14 / cam.zoom}" fill="transparent"/><circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${7 / cam.zoom}" fill="#FFFFFF" stroke="#1E4A33" stroke-width="${1.8 / cam.zoom}"/><path d="M${(mx - 3.5 / cam.zoom).toFixed(1)} ${my.toFixed(1)}h${(7 / cam.zoom).toFixed(1)}M${mx.toFixed(1)} ${(my - 3.5 / cam.zoom).toFixed(1)}v${(7 / cam.zoom).toFixed(1)}" stroke="#1E4A33" stroke-width="${1.6 / cam.zoom}"/></g>`;
+  }
+  p.forEach((v, i) => {
+    const [x, y] = proj(v[0], v[1], z);
+    const on = ui.shape.selV === i;
+    s += `<g class="vertex${on ? ' on' : ''}" data-vertex="${i}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${18 / cam.zoom}" fill="transparent"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(on ? 10 : 8) / cam.zoom}" fill="${on ? '#E0352B' : '#F2B33D'}" stroke="#FFFFFF" stroke-width="${2.5 / cam.zoom}"/></g>`;
+  });
+  return s;
+}
+
 function renderStats() {
   const beds = st.items.filter((i) => TYPES[i.type].kind === 'bed');
   const bedArea = beds.reduce((a, i) => a + i.w * i.d, 0);
-  const acres = (st.plot.w * st.plot.h) / 4046.86;
-  els.stats.innerHTML = `<b>${st.items.length}</b> items · <b>${beds.length}</b> beds (${fmt(bedArea)} m²) · plot ${fmt(st.plot.w)}×${fmt(st.plot.h)} m = <b>${acres.toFixed(2)}</b> ac`;
+  const area = Math.abs(polyArea(st.plot.pts));
+  const off = st.items.filter((i) => !onLand(i)).length;
+  els.stats.innerHTML = `<b>${st.items.length}</b> items · <b>${beds.length}</b> beds (${fmt(bedArea)} m²) · land ${Math.round(area).toLocaleString('en-MY')} m² = <b>${(area / 4046.86).toFixed(2)}</b> ac${off ? ` · <span class="off">${off} off the land</span>` : ''}`;
+  if (els.shapeBar) {
+    els.shapeBar.hidden = !ui.shape;
+    if (ui.shape) {
+      const rm = els.shapeBar.querySelector('[data-act=rmcorner]');
+      rm.disabled = ui.shape.selV == null || st.plot.pts.length <= 3;
+    }
+  }
   els.empty.hidden = st.items.length > 0 || !!ui.place;
   els.undo.disabled = !undoStack.length;
   els.redo.disabled = !redoStack.length;
@@ -503,6 +745,8 @@ function viewSize() {
 function fit(animate = false, itemsOnly = false) {
   const v = viewSize();
   if (!v.w || !v.h) return;
+  const lb = polyBox(st.plot.pts);
+  setPivot((lb.x0 + lb.x1) / 2, (lb.y0 + lb.y1) / 2);
   const b = bboxOf(itemsOnly && st.items.length ? st.items.flatMap(itemBounds) : [...plotBounds(), ...st.items.flatMap(itemBounds)]);
   const pad = itemsOnly ? 48 : 28;
   const zoom = Math.max(0.15, Math.min(6, Math.min((v.w - pad * 2) / (b.x1 - b.x0), (v.h - pad * 2) / (b.y1 - b.y0))));
@@ -570,6 +814,7 @@ function restore(json) {
   const data = sanitize(JSON.parse(json));
   if (!data) return;
   st = data;
+  if (ui.shape && ui.shape.selV != null && ui.shape.selV >= st.plot.pts.length) ui.shape.selV = null;
   if (!st.items.some((i) => i.id === ui.sel)) select(null);
   else select(ui.sel);
   requestRender();
@@ -582,6 +827,14 @@ function sanitize(raw) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.items)) return null;
   const num = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : null);
   const pw = num(raw.plot?.w, 5, 500) ?? 80, ph = num(raw.plot?.h, 5, 500) ?? 66;
+  let land = null;
+  const rp = raw.plot && raw.plot.pts;
+  if (Array.isArray(rp) && rp.length >= 3 && rp.length <= 100) {
+    land = rp.map((v) => (Array.isArray(v) ? [num(v[0], -1000, 1000), num(v[1], -1000, 1000)] : [null, null]));
+    if (land.some((v) => v[0] === null || v[1] === null) || Math.abs(polyArea(land)) < 1) land = null;
+  }
+  if (!land) land = rectPts(pw, ph);
+  if (polyArea(land) < 0) land.reverse();
   const items = [];
   const seen = new Set();
   for (const r of raw.items.slice(0, 2000)) {
@@ -595,7 +848,7 @@ function sanitize(raw) {
     const label = typeof r.label === 'string' ? r.label.slice(0, 24) : '';
     items.push({ id, type: r.type, x, y, w, d, rot, label });
   }
-  return { plot: { w: pw, h: ph }, items };
+  return { plot: { pts: land }, items };
 }
 
 function saveSoon() {
@@ -613,6 +866,8 @@ function load() {
     const raw = JSON.parse(localStorage.getItem(STORE) || 'null');
     const data = raw && sanitize(raw);
     if (data) st = data;
+    const lb = polyBox(st.plot.pts);
+    pivot = [(lb.x0 + lb.x1) / 2, (lb.y0 + lb.y1) / 2];
     if (raw && raw.cam) {
       cam.t = raw.cam.t === 0 ? 0 : 1;
       cam.angle = [0, 90, 180, 270].includes(raw.cam.angle) ? raw.cam.angle : 0;
@@ -655,7 +910,7 @@ function quickPlace(type) {
   const v = viewSize();
   const [cx, cy] = clientToWorld(v.left + v.w / 2, v.top + v.h / 2);
   const it = addItem(type, cx, cy);
-  const spot = findSpot(it, cx, cy) || findSpot(it, st.plot.w / 2, st.plot.h / 2);
+  const spot = findSpot(it, cx, cy) || findSpot(it, pivot[0], pivot[1]);
   if (!spot) { toast('No room left on the plot for that.'); return; }
   [it.x, it.y] = spot;
   commitNew(it);
@@ -733,6 +988,40 @@ function renderInspector() {
     saveSoon();
   });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+}
+
+/* ---------------- Land shape mode ---------------- */
+function enterShape() {
+  if (ui.shape) return;
+  if (ui.place) { ui.place = null; els.root.classList.remove('placing'); }
+  select(null);
+  ui.shape = { selV: null };
+  els.root.classList.add('shaping');
+  if (cam.t > 0.5) moveCamera({ t: 0 }); // corners are easiest to place from above
+  requestRender();
+}
+function exitShape() {
+  if (!ui.shape) return;
+  ui.shape = null;
+  els.root.classList.remove('shaping');
+  fit(true);
+  reportOffLand();
+  requestRender();
+}
+function removeCorner() {
+  const sh = ui.shape;
+  if (!sh || sh.selV == null || st.plot.pts.length <= 3) return;
+  const next = st.plot.pts.filter((_, i) => i !== sh.selV);
+  if (selfCrosses(next) || Math.abs(polyArea(next)) < 25) { toast("Can't remove that corner: the sides would cross."); return; }
+  pushUndo();
+  st.plot = { pts: next };
+  sh.selV = null;
+  saveSoon();
+  requestRender();
+}
+function reportOffLand() {
+  const off = st.items.filter((i) => !onLand(i)).length;
+  if (off) toast(`${off} item${off > 1 ? 's are' : ' is'} now off the land (shown in red). Move ${off > 1 ? 'them' : 'it'} back on.`);
 }
 
 /* ---------------- Templates ---------------- */
@@ -824,13 +1113,39 @@ function onStageDown(e) {
   ui.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (ui.pointers.size === 2) {
     // Second finger: cancel any drag and start pinch-zoom.
-    if (ui.drag && (ui.drag.mode === 'move' || ui.drag.mode === 'resize')) cancelDrag();
+    if (ui.drag && (ui.drag.mode === 'move' || ui.drag.mode === 'resize' || ui.drag.mode === 'vertex')) cancelDrag();
     ui.drag = null;
     const [a, b] = [...ui.pointers.values()];
     ui.pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) };
     return;
   }
   if (ui.pointers.size > 2) return;
+  if (ui.shape) {
+    const start = { sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY };
+    const vtx = e.target.closest('[data-vertex]');
+    const mid = e.target.closest('[data-mid]');
+    const w0 = clientToWorld(e.clientX, e.clientY);
+    if (vtx) {
+      const i = Number(vtx.dataset.vertex);
+      ui.drag = { ...start, mode: 'vertex-pending', i, orig: st.plot.pts.map((v) => [...v]), base: [...st.plot.pts[i]], w0 };
+    } else if (mid) {
+      // Tap or drag a + knob: a new corner appears in the middle of that side.
+      const i = Number(mid.dataset.mid);
+      const p = st.plot.pts, a = p[i], b = p[(i + 1) % p.length];
+      const v = [snap((a[0] + b[0]) / 2), snap((a[1] + b[1]) / 2)];
+      const orig = p.map((q) => [...q]);
+      const next = [...p.slice(0, i + 1), v, ...p.slice(i + 1)];
+      if (selfCrosses(next)) { ui.drag = { ...start, mode: 'pan-pending', tap: null }; return; }
+      pushUndo();
+      st.plot = { pts: next };
+      ui.shape.selV = i + 1;
+      ui.drag = { ...start, mode: 'vertex', i: i + 1, orig, base: [...v], w0, pushed: true, valid: true };
+      requestRender();
+    } else {
+      ui.drag = { ...start, mode: 'pan-pending', tap: null };
+    }
+    return;
+  }
   const handle = e.target.closest('[data-handle]');
   const g = e.target.closest('[data-id]');
   const start = { sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY };
@@ -874,6 +1189,15 @@ function onStageMove(e) {
     els.root.classList.add('dragging');
   }
   if (d.mode === 'resize-pending' && moved) { d.mode = 'resize'; pushUndo(); d.pushed = true; }
+  if (d.mode === 'vertex-pending' && moved) { d.mode = 'vertex'; pushUndo(); d.pushed = true; ui.shape.selV = d.i; }
+  if (d.mode === 'vertex') {
+    const [wx, wy] = clientToWorld(e.clientX, e.clientY);
+    const next = st.plot.pts.map((v) => [...v]);
+    next[d.i] = [snap(d.base[0] + wx - d.w0[0]), snap(d.base[1] + wy - d.w0[1])];
+    st.plot = { pts: next };
+    d.valid = !selfCrosses(next) && Math.abs(polyArea(next)) >= 25;
+    requestRender();
+  }
 
   if (d.mode === 'pan') {
     cam.tx += e.clientX - d.lx;
@@ -922,6 +1246,10 @@ function cancelDrag() {
     if (it) Object.assign(it, d.orig);
     if (d.pushed) undoStack.pop();
   }
+  if (d.mode === 'vertex' && d.orig) {
+    st.plot = { pts: d.orig };
+    if (d.pushed) undoStack.pop();
+  }
   ui.drag = null;
   els.root.classList.remove('dragging');
   requestRender();
@@ -940,6 +1268,17 @@ function onStageUp(e) {
   els.root.classList.remove('dragging');
   if (!d) return;
   if (e.type === 'pointercancel') { ui.drag = d; cancelDrag(); return; }
+  if (d.mode === 'vertex-pending') { ui.shape.selV = d.i; requestRender(); return; }
+  if (d.mode === 'vertex') {
+    if (d.valid === false) {
+      st.plot = { pts: d.orig };
+      if (d.pushed) undoStack.pop();
+      toast("The land's sides can't cross each other.");
+    } else saveSoon();
+    requestRender();
+    return;
+  }
+  if (ui.shape && d.mode === 'pan-pending') { ui.shape.selV = null; requestRender(); return; }
   if (d.mode === 'move-pending') select(d.id);
   else if (d.mode === 'pan-pending') select(d.tap);
   else if (d.mode === 'move' || d.mode === 'resize') {
@@ -969,7 +1308,7 @@ function onWheel(e) {
 /* Dragging from the tray */
 function onTrayDown(e) {
   const btn = e.target.closest('[data-type]');
-  if (!btn || ui.animating) return;
+  if (!btn || ui.animating || ui.shape) return;
   ui.trayPress = { type: btn.dataset.type, sx: e.clientX, sy: e.clientY, id: e.pointerId, btn };
 }
 function onWindowMove(e) {
@@ -1022,7 +1361,7 @@ function onWindowUp(e) {
 function onKey(e) {
   if (e.target.closest && e.target.closest('input, textarea, select, dialog')) return;
   if (e.key === 'Escape' && !els.menu.hidden) { closeMenu(true); return; }
-  const busy = ui.place || ui.trayPress || (ui.drag && (ui.drag.mode === 'move' || ui.drag.mode === 'resize' || ui.drag.mode === 'move-pending' || ui.drag.mode === 'resize-pending'));
+  const busy = ui.place || ui.trayPress || (ui.drag && ['move', 'resize', 'move-pending', 'resize-pending', 'vertex', 'vertex-pending'].includes(ui.drag.mode));
   if (busy) {
     if (e.key === 'Escape') {
       if (ui.place) { ui.place = null; els.root.classList.remove('placing'); }
@@ -1030,6 +1369,11 @@ function onKey(e) {
       cancelDrag();
       requestRender();
     }
+    return;
+  }
+  if (ui.shape && !(e.ctrlKey || e.metaKey)) {
+    if (e.key === 'Escape' || e.key === 'Enter') exitShape();
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeCorner(); }
     return;
   }
   const mod = e.ctrlKey || e.metaKey;
@@ -1076,16 +1420,16 @@ function readColors() {
 
 function thumbSVG(T) {
   const saved = { ...cam };
-  const savedPlot = st.plot;
+  const savedPivot = pivot;
   cam = { t: 1, angle: 0, zoom: 1, tx: 0, ty: 0 };
-  st = { ...st, plot: { w: 0, h: 0 } };
+  pivot = [0, 0];
   const w = Math.min(T.w, 6), d = Math.min(T.d, 6);
   const it = { id: 'thumb', type: T.type, x: 0, y: 0, w, d, rot: 0, label: '' };
   const b = bboxOf(itemBounds(it));
   const pad = 4;
   const svg = `<svg viewBox="${(b.x0 - pad).toFixed(1)} ${(b.y0 - pad).toFixed(1)} ${(b.x1 - b.x0 + pad * 2).toFixed(1)} ${(b.y1 - b.y0 + pad * 2).toFixed(1)}" aria-hidden="true">${itemBody(it)}</svg>`;
   cam = saved;
-  st = { ...st, plot: savedPlot };
+  pivot = savedPivot;
   return svg;
 }
 
@@ -1120,7 +1464,8 @@ export function mount(host) {
         <button type="button" class="tool" data-act="menu" aria-label="More" aria-haspopup="true" aria-expanded="false">${icon('more')}</button>
         <div class="menu" hidden role="menu">
           <button type="button" role="menuitem" data-act="starter">Start from Block C</button>
-          <button type="button" role="menuitem" data-act="plot">Plot size…</button>
+          <button type="button" role="menuitem" data-act="shape">Edit land shape</button>
+          <button type="button" role="menuitem" data-act="plot">Land as a rectangle…</button>
           <button type="button" role="menuitem" data-act="png">Save picture (PNG)</button>
           <button type="button" role="menuitem" data-act="export">Export layout file</button>
           <button type="button" role="menuitem" data-act="import">Import layout file</button>
@@ -1133,6 +1478,13 @@ export function mount(host) {
         <g class="cam"><g class="world"></g></g>
       </svg>
       <div class="lay-stats" aria-live="polite"></div>
+      <div class="shape-bar card" hidden>
+        <p><b>Edit land shape.</b> Drag the corners to match your land. Tap <span class="mini-plus">+</span> on a side to add a corner.</p>
+        <div class="shape-actions">
+          <button type="button" data-act="rmcorner" disabled>Remove corner</button>
+          <button type="button" class="btn" data-act="shapedone">Done</button>
+        </div>
+      </div>
       <div class="lay-zoom">
         <button type="button" class="tool" data-act="zin" aria-label="Zoom in">${icon('plus')}</button>
         <button type="button" class="tool" data-act="zout" aria-label="Zoom out">${icon('minus')}</button>
@@ -1143,6 +1495,7 @@ export function mount(host) {
         <h3>Build your farm</h3>
         <p>Drag things up from the tray onto your land, or tap one to drop it in the middle.</p>
         <button type="button" class="btn" data-act="starter">Start from Block C</button>
+        <button type="button" class="link-btn" data-act="shape">Land not a rectangle? Edit its shape</button>
       </div>
       <div class="lay-inspector card" hidden></div>
       <div class="lay-toast" role="status" hidden></div>
@@ -1154,8 +1507,8 @@ export function mount(host) {
     <input type="file" accept="application/json,.json" hidden>
     <dialog class="sheet plot-dlg">
       <form method="dialog">
-        <h2>Plot size</h2>
-        <p class="muted">Measure the land as a rectangle. 1.3 acres is about 80 × 66 m.</p>
+        <h2>Land as a rectangle</h2>
+        <p class="muted">Sets the land to a simple rectangle (1.3 acres is about 80 × 66 m). If your land is another shape, use <b>Edit land shape</b> afterwards to move the corners.</p>
         <div class="plot-fields">
           <label>Width (m)<input name="w" type="number" min="5" max="500" step="0.5" required></label>
           <label>Length (m)<input name="h" type="number" min="5" max="500" step="0.5" required></label>
@@ -1171,7 +1524,7 @@ export function mount(host) {
     root, svg: root.querySelector('.lay-svg'), cam: root.querySelector('.cam'), world: root.querySelector('.world'),
     stats: root.querySelector('.lay-stats'), inspector: root.querySelector('.lay-inspector'), empty: root.querySelector('.lay-empty'),
     toast: root.querySelector('.lay-toast'), tray: root.querySelector('.tray-items'), menu: root.querySelector('.menu'),
-    file: root.querySelector('input[type=file]'), plotDlg: root.querySelector('.plot-dlg'),
+    file: root.querySelector('input[type=file]'), plotDlg: root.querySelector('.plot-dlg'), shapeBar: root.querySelector('.shape-bar'),
     undo: root.querySelector('[data-act=undo]'), redo: root.querySelector('[data-act=redo]'),
   };
 
@@ -1196,7 +1549,7 @@ export function mount(host) {
   on(els.tray, 'pointerdown', onTrayDown);
   on(els.tray, 'click', (e) => {
     const b = e.target.closest('[data-type]');
-    if (b && e.detail === 0 && !ui.animating) quickPlace(b.dataset.type);
+    if (b && e.detail === 0 && !ui.animating && !ui.shape) quickPlace(b.dataset.type);
   });
   on(window, 'pointermove', onWindowMove, { passive: false });
   on(window, 'pointerup', onWindowUp);
@@ -1242,6 +1595,7 @@ export function mount(host) {
         st.items = blockCStarter();
         select(null);
         fit(true, true);
+        reportOffLand();
         if (!reduceMotion()) {
           const t0 = performance.now();
           st.items.forEach((it, i) => ui.plops.set(it.id, t0 + i * 45));
@@ -1250,6 +1604,9 @@ export function mount(host) {
         saveSoon();
         break;
       case 'plot': openPlotDialog(); break;
+      case 'shape': enterShape(); break;
+      case 'shapedone': exitShape(); break;
+      case 'rmcorner': removeCorner(); break;
       case 'png': exportPNG(); break;
       case 'export': exportFile(); break;
       case 'import': els.file.click(); break;
@@ -1279,20 +1636,19 @@ export function mount(host) {
   };
   form.addEventListener('input', showArea);
   function openPlotDialog() {
-    form.w.value = st.plot.w; form.h.value = st.plot.h; showArea();
+    const lb = polyBox(st.plot.pts);
+    form.w.value = fmt(lb.x1 - lb.x0); form.h.value = fmt(lb.y1 - lb.y0); showArea();
     els.plotDlg.showModal();
   }
   els.plotDlg.addEventListener('close', () => {
     if (els.plotDlg.returnValue !== 'ok') return;
-    const w = Math.max(5, Math.min(500, Number(form.w.value) || st.plot.w));
-    const h = Math.max(5, Math.min(500, Number(form.h.value) || st.plot.h));
-    if (w === st.plot.w && h === st.plot.h) return;
+    const w = Math.max(5, Math.min(500, Number(form.w.value) || 80));
+    const h = Math.max(5, Math.min(500, Number(form.h.value) || 66));
     pushUndo();
-    st.plot = { w, h };
+    st.plot = { pts: rectPts(w, h) };
     fit(true);
     saveSoon();
-    const outside = st.items.filter((i) => isSolid(TYPES[i.type]) && !fits(i)).length;
-    if (outside) toast(`${outside} item${outside > 1 ? 's are' : ' is'} now outside the plot or overlapping. Move ${outside > 1 ? 'them' : 'it'} back in.`);
+    reportOffLand();
   });
 
   function toggleMenu(open) {

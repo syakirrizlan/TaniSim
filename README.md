@@ -34,11 +34,12 @@ A small web app that puts the notes on your phone: this week's rhythm, the next 
 - iPhone / iPad: open the link in Safari, tap **Install app**, then follow the steps (Share → Add to Home Screen).
 
 **Layout tab (build mode):** sketch the farm by dragging items from the tray onto a 1 m grid.
-- Drag an item **up** out of the tray onto the land, or tap it to drop it in the middle.
+- Drag an item **up** out of the tray onto the land, or tap it to drop it in the middle. The tray has beds, fields, paddy, fruit, durian, banana, coconut, rubber and bamboo trees, a hut, greenhouse, shade-net house, pondok, mushroom house, goat shed, coop, rabbitry, well, pond, water and fish tanks, paths, fences, gates and more.
 - Tap an item to select it, then **Rotate**, **Copy**, **Delete**, give it a label (e.g. `C1`), or drag the ⊕ handles to resize beds, ponds, fields, paths and fences.
 - Switch between **Plan** (top-down, for measuring) and **3D** (diorama view), turn the view 90°, pinch or scroll to zoom.
 - Items can't overlap or leave the plot, except fields, paths and the road, which can sit under other things.
-- **⋯ menu:** start from the Block C layout, set the plot size, save a picture (PNG), or export/import a layout file.
+- **Land shape:** ⋯ → **Edit land shape**. Drag the corners to match your land and tap **+** on a side to add a corner. Each side shows its length in metres, and the area in acres updates as you go. Items left off the land turn red.
+- **⋯ menu:** start from the Block C layout, edit the land shape, reset the land to a rectangle, save a picture (PNG), or export/import a layout file.
 - The layout saves on the device. To move it to another phone or computer, use Export, then Import there.
 
 **Update the notes:** edit or add `.md` files in `notes/` and push to `main`. The installed app shows "A newer version of your notes is ready — Reload" next time it's opened.
