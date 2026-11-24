@@ -166,16 +166,34 @@ function rectInPoly(r, p) {
   }
   return true;
 }
+// Point c lies on segment a-b (collinear and inside its extent).
+function onSeg(a, b, c) {
+  if (Math.abs(orient(a, b, c)) > 1e-9) return false;
+  return c[0] >= Math.min(a[0], b[0]) - 1e-9 && c[0] <= Math.max(a[0], b[0]) + 1e-9
+    && c[1] >= Math.min(a[1], b[1]) - 1e-9 && c[1] <= Math.max(a[1], b[1]) + 1e-9;
+}
+// True when the land outline is not a simple shape: sides cross, touch, fold back
+// over each other, or two corners sit (almost) on the same spot.
 function selfCrosses(p) {
   const n = p.length;
+  if (n < 3) return true;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (Math.hypot(p[i][0] - p[j][0], p[i][1] - p[j][1]) < 0.25) return true;
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    // A corner whose two sides double back along the same line makes a zero-width spike.
+    const a = p[(i - 1 + n) % n], b = p[i], c = p[(i + 1) % n];
+    if (Math.abs(orient(a, b, c)) < 1e-9 && (a[0] - b[0]) * (c[0] - b[0]) + (a[1] - b[1]) * (c[1] - b[1]) > 0) return true;
+  }
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       if (j === i + 1 || (i === 0 && j === n - 1)) continue; // neighbouring sides share a corner
-      if (segsCross(p[i], p[(i + 1) % n], p[j], p[(j + 1) % n])) return true;
+      const a = p[i], b = p[(i + 1) % n], c = p[j], d = p[(j + 1) % n];
+      if (segsCross(a, b, c, d) || onSeg(a, b, c) || onSeg(a, b, d) || onSeg(c, d, a) || onSeg(c, d, b)) return true;
     }
   }
-  // Two corners on the same spot also count as broken.
-  for (let i = 0; i < n; i++) if (Math.hypot(p[i][0] - p[(i + 1) % n][0], p[i][1] - p[(i + 1) % n][1]) < 0.25) return true;
   return false;
 }
 function circlePoly(cx, cy, R, n = 20) {
@@ -499,7 +517,10 @@ function itemBounds(it) {
   const T = TYPES[it.type];
   const r = rectOf(it);
   const z = topZ(T, r);
-  const list = cornersOf(r).flatMap((p) => [proj(p[0], p[1], 0), proj(p[0], p[1], z)]);
+  // Roofs overhang the walls, so the top of the bounds uses the roof's footprint.
+  const rr = T.kind === 'building' ? inset(r, -0.25) : T.kind === 'pondok' ? inset(r, -0.3) : r;
+  const list = [...cornersOf(r).map((p) => proj(p[0], p[1], 0)),
+    ...cornersOf(rr).flatMap((p) => [proj(p[0], p[1], T.h || 0), proj(p[0], p[1], z)])];
   if (T.kind === 'tree') {
     const R = (Math.min(r.x1 - r.x0, r.y1 - r.y0) / 2) * S;
     const [cx, cy] = proj(it.x, it.y, T.h * 0.8);
@@ -832,6 +853,16 @@ function sanitize(raw) {
   if (Array.isArray(rp) && rp.length >= 3 && rp.length <= 100) {
     land = rp.map((v) => (Array.isArray(v) ? [num(v[0], -1000, 1000), num(v[1], -1000, 1000)] : [null, null]));
     if (land.some((v) => v[0] === null || v[1] === null) || Math.abs(polyArea(land)) < 1) land = null;
+  }
+  if (land) {
+    // Drop repeated corners, including a closing corner that repeats the first one.
+    const clean = [];
+    for (const v of land) {
+      const prev = clean[clean.length - 1];
+      if (!prev || Math.hypot(prev[0] - v[0], prev[1] - v[1]) >= 0.25) clean.push(v);
+    }
+    while (clean.length > 3 && Math.hypot(clean[0][0] - clean[clean.length - 1][0], clean[0][1] - clean[clean.length - 1][1]) < 0.25) clean.pop();
+    land = clean.length >= 3 && !selfCrosses(clean) && Math.abs(polyArea(clean)) >= 25 ? clean : null;
   }
   if (!land) land = rectPts(pw, ph);
   if (polyArea(land) < 0) land.reverse();
