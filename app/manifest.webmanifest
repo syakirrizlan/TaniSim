@@ -20,6 +20,7 @@
   ],
   "shortcuts": [
     { "name": "Up next", "url": "./#/", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Farm layout", "url": "./#/layout", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Notes", "url": "./#/notes", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

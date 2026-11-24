@@ -18,12 +18,15 @@ async function loadData() {
 function route() {
   const hash = location.hash.replace(/^#/, '') || '/';
   const [, section, slug] = hash.split('/');
-  const tab = section === 'notes' ? 'notes' : section === 'graphics' ? 'graphics' : 'home';
+  const tab = ['notes', 'graphics', 'layout'].includes(section) ? section : 'home';
   document.querySelectorAll('.tabbar a').forEach((a) => {
     if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
-  const render = () => {
+  const render = async () => {
+    if (layoutMod && section !== 'layout') { layoutMod.unmount(); layoutMod = null; }
+    document.body.classList.toggle('layout-mode', section === 'layout');
+    if (section === 'layout') return renderLayout();
     if (section === 'notes' && slug) return renderNote(decodeURIComponent(slug));
     if (section === 'notes') return renderNotes();
     if (section === 'graphics') return renderGraphics();
@@ -31,7 +34,7 @@ function route() {
   };
   const run = async () => {
     await render();
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    if (section !== 'layout') window.scrollTo({ top: 0, behavior: 'instant' });
   };
   if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     document.startViewTransition(run);
@@ -244,6 +247,22 @@ async function renderNote(slug) {
   document.title = `${shortTitle(note)} · TaniSim`;
 }
 
+/* ---------------- Layout (build mode) ---------------- */
+let layoutMod = null;
+async function renderLayout() {
+  if (layoutMod) return;
+  view.innerHTML = '<div class="card empty">Loading layout…</div>';
+  try {
+    const mod = await import('./layout.js');
+    if (!location.hash.startsWith('#/layout')) return; // user moved on while loading
+    layoutMod = mod;
+    layoutMod.mount(view);
+    document.title = 'Layout · TaniSim';
+  } catch {
+    view.innerHTML = '<div class="card empty">The layout builder couldn\'t load. Check your connection and try again.</div>';
+  }
+}
+
 /* ---------------- Graphics ---------------- */
 function renderGraphics() {
   const icons = [
@@ -341,6 +360,11 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ---------------- Start ---------------- */
+const topbar = document.querySelector('.topbar');
+const syncTopbar = () => document.documentElement.style.setProperty('--topbar-h', `${topbar.offsetHeight}px`);
+syncTopbar();
+window.addEventListener('resize', syncTopbar);
+new ResizeObserver(syncTopbar).observe(topbar);
 window.addEventListener('hashchange', () => { document.title = 'TaniSim'; route(); });
 loadData()
   .then(route)

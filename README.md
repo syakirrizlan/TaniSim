@@ -33,6 +33,14 @@ A small web app that puts the notes on your phone: this week's rhythm, the next 
 - Android / Chrome / Edge: tap **Install app** in the top bar.
 - iPhone / iPad: open the link in Safari, tap **Install app**, then follow the steps (Share → Add to Home Screen).
 
+**Layout tab (build mode):** sketch the farm by dragging items from the tray onto a 1 m grid.
+- Drag an item **up** out of the tray onto the land, or tap it to drop it in the middle.
+- Tap an item to select it, then **Rotate**, **Copy**, **Delete**, give it a label (e.g. `C1`), or drag the ⊕ handles to resize beds, ponds, fields, paths and fences.
+- Switch between **Plan** (top-down, for measuring) and **3D** (diorama view), turn the view 90°, pinch or scroll to zoom.
+- Items can't overlap or leave the plot, except fields, paths and the road, which can sit under other things.
+- **⋯ menu:** start from the Block C layout, set the plot size, save a picture (PNG), or export/import a layout file.
+- The layout saves on the device. To move it to another phone or computer, use Export, then Import there.
+
 **Update the notes:** edit or add `.md` files in `notes/` and push to `main`. The installed app shows "A newer version of your notes is ready — Reload" next time it's opened.
 
 Milestones are read from checklist lines that end in a date, e.g. `- [ ] First cili padi pick (Mar 2027)`. Tick one (`- [x]`) to mark it done.
