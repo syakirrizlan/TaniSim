@@ -18,15 +18,19 @@ async function loadData() {
 function route() {
   const hash = location.hash.replace(/^#/, '') || '/';
   const [, section, slug] = hash.split('/');
-  const tab = ['notes', 'graphics', 'layout'].includes(section) ? section : 'home';
+  const tab = ['notes', 'graphics', 'layout', 'calendar'].includes(section) ? section : section === 'about' ? '' : 'home';
   document.querySelectorAll('.tabbar a').forEach((a) => {
     if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
   const render = async () => {
     if (layoutMod && section !== 'layout') { layoutMod.unmount(); layoutMod = null; }
+    if (calendarMod && section !== 'calendar') { calendarMod.unmount(); calendarMod = null; }
     document.body.classList.toggle('layout-mode', section === 'layout');
+    document.querySelector('.info-btn')?.setAttribute('aria-current', section === 'about' ? 'page' : 'false');
     if (section === 'layout') return renderLayout();
+    if (section === 'calendar') return renderCalendar();
+    if (section === 'about') return renderAbout();
     if (section === 'notes' && slug) return renderNote(decodeURIComponent(slug));
     if (section === 'notes') return renderNotes();
     if (section === 'graphics') return renderGraphics();
@@ -111,7 +115,27 @@ function renderHome() {
       ${upcoming.length ? `<ul class="ms-list">${upcoming.map(({ m, n }, i) => milestoneItem(m, n, i, nowIdx)).join('')}</ul>` : '<div class="card empty">No dated milestones ahead.</div>'}
       ${overdue.length ? `<details class="overdue-box"><summary>${overdue.length} earlier milestone${overdue.length > 1 ? 's' : ''} not ticked yet</summary>
         <ul class="ms-list">${overdue.map(({ m, n }, i) => milestoneItem(m, n, i, nowIdx, 'overdue')).join('')}</ul></details>` : ''}
-    </section>`;
+    </section>
+    <section class="section" id="nextWeek"></section>
+    <a class="about-foot" href="#/about">About TaniSim · version ${esc(data.app?.version || '')}</a>`;
+  fillNextWeek();
+}
+
+// "Next 7 days" on Today, from the calendar.
+async function fillNextWeek() {
+  const box = document.getElementById('nextWeek');
+  if (!box) return;
+  try {
+    const cal = await import('./calendar.js');
+    if (!document.body.contains(box)) return;
+    const items = cal.upcoming(data, 7).filter((x) => x.role !== 'end');
+    const fmtDay = (iso) => { const [y, m, d] = iso.split('-').map(Number); const dt = new Date(y, m - 1, d); return `${DAYS[dt.getDay()]} ${d} ${MONTHS[m - 1]}`; };
+    box.innerHTML = `
+      <div class="section-head"><h2>Next 7 days</h2><a href="#/calendar">Open calendar →</a></div>
+      ${items.length ? `<ul class="nw-list">${items.slice(0, 6).map((x, i) => `<li class="card rise" style="--i:${i};--c:${cal.KINDS[x.kind].color}"><a href="#/calendar/${x.iso}"><span class="sw"></span><span class="nw-t">${esc(x.title)}${x.bed ? ` <span class="bed">${esc(x.bed)}</span>` : ''}</span><span class="nw-d">${fmtDay(x.iso)}</span></a></li>`).join('')}</ul>
+        ${items.length > 6 ? `<p class="nw-more"><a href="#/calendar">${items.length - 6} more in the calendar</a></p>` : ''}`
+        : '<div class="card empty">Nothing dated in the next 7 days. <a href="#/calendar">Open the calendar</a> to add a task.</div>'}`;
+  } catch { box.innerHTML = ''; }
 }
 
 const shortTitle = (n) => n.title.replace(/^[^\p{L}\p{N}]+/u, '').replace(/\s*\([^)]*\)\s*$/, '');
@@ -263,6 +287,103 @@ async function renderLayout() {
   }
 }
 
+/* ---------------- Calendar ---------------- */
+let calendarMod = null;
+async function renderCalendar() {
+  view.innerHTML = '<div class="card empty">Loading calendar…</div>';
+  try {
+    const mod = await import('./calendar.js');
+    if (!location.hash.startsWith('#/calendar')) return;
+    if (calendarMod) calendarMod.unmount();
+    calendarMod = mod;
+    mod.mount(view, data);
+    document.title = 'Calendar · TaniSim';
+  } catch {
+    view.innerHTML = '<div class="card empty">The calendar couldn\'t load. Check your connection and try again.</div>';
+  }
+}
+
+/* ---------------- About ---------------- */
+function renderAbout() {
+  const app = data.app || { version: '', commit: '', changelog: [] };
+  const built = data.builtAt ? new Date(data.builtAt) : null;
+  const builtText = built ? built.toLocaleString('en-MY', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  const log = app.changelog || [];
+  const entry = (c, open) => `<details class="cl card"${open ? ' open' : ''}><summary><b>Version ${esc(c.version)}</b><span>${esc(new Date(c.date + 'T00:00').toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' }))}</span></summary><ul>${c.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></details>`;
+  view.innerHTML = `
+    <section class="about-hero rise">
+      <img src="icons/icon.svg" alt="" width="72" height="72">
+      <div>
+        <h1>TaniSim</h1>
+        <p class="ver">Version <b>${esc(app.version)}</b></p>
+        <p class="build">Build ${esc(app.commit || 'local')}${builtText ? ` · ${esc(builtText)}` : ''}</p>
+      </div>
+    </section>
+    <section class="section">
+      <div class="status-grid">
+        <div class="card st rise" style="--i:1"><span class="st-k">Works offline</span><span class="st-v" id="stOffline">Checking…</span></div>
+        <div class="card st rise" style="--i:2"><span class="st-k">Installed</span><span class="st-v" id="stInstalled">${isStandalone() ? 'Yes, running as an app' : 'No, in the browser'}</span></div>
+        <div class="card st rise" style="--i:3"><span class="st-k">Connection</span><span class="st-v">${navigator.onLine ? 'Online' : 'Offline'}</span></div>
+        <div class="card st rise" style="--i:4"><span class="st-k">Space used</span><span class="st-v" id="stStorage">…</span></div>
+      </div>
+      <div class="about-actions rise" style="--i:5">
+        <button type="button" class="btn" id="checkUpdate">Check for updates</button>
+        <span class="upd-msg" id="updMsg" role="status" aria-live="polite"></span>
+      </div>
+    </section>
+    <section class="section">
+      <div class="section-head"><h2>What's new</h2><span>${log.length} releases</span></div>
+      <div class="cl-list">${log.map((c, i) => entry(c, i === 0)).join('')}</div>
+    </section>
+    <section class="section">
+      <div class="section-head"><h2>About</h2></div>
+      <div class="card about-text">
+        <p>TaniSim is the planning app for the 1.3-acre farm at Sungai Lalah, Pedas: the farm notes, a calendar built from them, and a layout builder for sketching the land.</p>
+        <p>The notes and the app itself are saved for offline use. Your <b>layout</b> and <b>calendar tasks</b> are saved on this device only. To move a layout to another device, use ⋯ → Export layout file in Layout.</p>
+        <p class="credits">Built with <a href="https://marked.js.org/" target="_blank" rel="noopener">marked</a> and <a href="https://mermaid.js.org/" target="_blank" rel="noopener">Mermaid</a> (MIT licence), and the Barlow typeface (SIL Open Font Licence).</p>
+      </div>
+    </section>`;
+  document.title = 'About · TaniSim';
+  // Offline copy and storage
+  (async () => {
+    const off = document.getElementById('stOffline');
+    try {
+      const keys = 'caches' in window ? await caches.keys() : [];
+      const shell = keys.find((k) => k.startsWith('tanisim-shell-'));
+      if (off) off.textContent = navigator.serviceWorker?.controller && shell ? `Yes (copy ${shell.slice(14, 20)})` : 'Not yet: open the app once online';
+    } catch { if (off) off.textContent = 'Unknown'; }
+    const stg = document.getElementById('stStorage');
+    try {
+      const est = await navigator.storage?.estimate?.();
+      if (stg) stg.textContent = est ? `${(est.usage / 1048576).toFixed(1)} MB` : 'Unknown';
+    } catch { if (stg) stg.textContent = 'Unknown'; }
+  })();
+  const btn = document.getElementById('checkUpdate');
+  const msg = document.getElementById('updMsg');
+  btn.addEventListener('click', async () => {
+    if (!swReg) { msg.textContent = 'Updates need the installed app or a secure (https) page.'; return; }
+    if (!navigator.onLine) { msg.textContent = "You're offline. Connect to the internet and try again."; return; }
+    btn.disabled = true;
+    msg.textContent = 'Checking…';
+    try {
+      await swReg.update();
+      const w = swReg.installing || swReg.waiting;
+      if (!w) { msg.textContent = `You're on the latest version (${app.version}).`; return; }
+      msg.textContent = 'A new version is downloading…';
+      const ready = () => {
+        msg.innerHTML = 'A new version is ready. <button type="button" class="link-btn inline" id="applyUpd">Reload now</button>';
+        document.getElementById('applyUpd').addEventListener('click', () => (swReg.waiting || w).postMessage('skipWaiting'));
+      };
+      if (w.state === 'installed') ready();
+      else w.addEventListener('statechange', () => { if (w.state === 'installed') ready(); });
+    } catch {
+      msg.textContent = "Couldn't check right now. Try again in a moment.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 /* ---------------- Graphics ---------------- */
 function renderGraphics() {
   const icons = [
@@ -329,10 +450,12 @@ function toast(text, action) {
   if (!action) toastTimer = setTimeout(() => { toastEl.hidden = true; }, 4000);
 }
 
+let swReg = null;
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register('sw.js');
+      swReg = reg;
       const firstInstall = !navigator.serviceWorker.controller;
       const offerUpdate = (worker) => toast('A newer version of your notes is ready.', {
         label: 'Reload',

@@ -9,5 +9,6 @@
   "devDependencies": {
     "marked": "^15.0.12",
     "mermaid": "^11.4.1"
-  }
+  },
+  "version": "1.5.0"
 }

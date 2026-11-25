@@ -8,6 +8,8 @@ import { createHash } from 'node:crypto';
 import { cp, mkdir, readdir, readFile, rm, writeFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
+import { buildCalendar } from './calendar-data.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'dist');
@@ -61,6 +63,19 @@ function parseLiveLinks(readme) {
   return [...section.matchAll(/^-\s+(.+?):\s+(https:\/\/\S+)/gm)].map((m) => ({ title: m[1].trim(), url: m[2] }));
 }
 
+// "## 1.5.0 — 2026-11-25" followed by "- item" lines.
+function parseChangelog(src) {
+  const out = [];
+  let cur = null;
+  for (const line of src.split('\n')) {
+    const h = line.match(/^##\s+(\d+\.\d+\.\d+)\s*[—-]\s*(\d{4}-\d{2}-\d{2})/);
+    if (h) { cur = { version: h[1], date: h[2], items: [] }; out.push(cur); continue; }
+    const li = line.match(/^-\s+(.+)/);
+    if (li && cur) cur.items.push(li[1].trim());
+  }
+  return out;
+}
+
 async function walk(dir) {
   const files = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -81,6 +96,7 @@ async function main() {
   // Notes
   const noteFiles = (await readdir(path.join(root, 'notes'))).filter((f) => f.endsWith('.md')).sort();
   const notes = [];
+  const bodies = [];
   let rhythm = null;
   for (const file of noteFiles) {
     const src = await readFile(path.join(root, 'notes', file), 'utf8');
@@ -101,11 +117,19 @@ async function main() {
       updated: meta.updated || meta.created || '',
       milestones: parseMilestones(body),
     });
+    bodies.push({ slug, title, body, milestones: notes[notes.length - 1].milestones });
     await writeFile(path.join(out, 'notes', `${slug}.md`), body);
   }
 
   const readme = await readFile(path.join(root, 'README.md'), 'utf8');
-  const data = { builtAt: new Date().toISOString(), notes, rhythm, graphics: parseLiveLinks(readme) };
+  const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+  let commit = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7);
+  if (!commit) {
+    try { commit = execSync('git rev-parse --short HEAD', { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { commit = ''; }
+  }
+  const app = { version: pkg.version, commit, changelog: parseChangelog(await readFile(path.join(root, 'CHANGELOG.md'), 'utf8').catch(() => '')) };
+  const calendar = buildCalendar(bodies);
+  const data = { builtAt: new Date().toISOString(), app, notes, rhythm, calendar, graphics: parseLiveLinks(readme) };
   await writeFile(path.join(out, 'notes', 'index.json'), JSON.stringify(data, null, 2));
 
   // Vendored libraries
@@ -127,6 +151,7 @@ async function main() {
 
   let bytes = 0;
   for (const f of all) bytes += (await stat(path.join(out, f))).size;
+  console.log(`TaniSim ${app.version}${commit ? ` (${commit})` : ''}: ${calendar.length} calendar events`);
   console.log(`Built dist/ — ${notes.length} notes, ${precache.length} precached files, version ${version}, ${(bytes / 1024).toFixed(0)} KB total`);
 }
 

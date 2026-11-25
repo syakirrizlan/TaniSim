@@ -43,6 +43,10 @@ A small web app that puts the notes on your phone: this week's rhythm, the next 
 - **⋯ menu:** start from the Block C layout, edit the land shape, reset the land to a rectangle, save a picture (PNG), or export/import a layout file.
 - The layout saves on the device. To move it to another phone or computer, use Export, then Import there.
 
+**Calendar tab:** dates from the notes (Block C bed jobs, nursery sowings, milestones, Ramadan and Raya, AI project stages) plus the weekly rhythm, by month or as a list. "Early/mid/late" dates are shown as about the 5th/15th/25th. Tap a day to add your own tasks (saved on this device).
+
+**About (ⓘ in the top bar):** app version, build, offline status, Check for updates, and what's new (from `CHANGELOG.md`). Bump `version` in `package.json` and add a `CHANGELOG.md` entry for each release.
+
 **Update the notes:** edit or add `.md` files in `notes/` and push to `main`. The installed app shows "A newer version of your notes is ready — Reload" next time it's opened.
 
 Milestones are read from checklist lines that end in a date, e.g. `- [ ] First cili padi pick (Mar 2027)`. Tick one (`- [x]`) to mark it done.
