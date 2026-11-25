@@ -260,7 +260,9 @@ body.layout-mode main { max-width: none; padding: 0; }
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); background: var(--bg);
 }
-.lay-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; min-width: 0; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); background: var(--surface); }
+/* No overflow clipping here: the ⋯ menu drops down out of this bar. */
+.lay-bar { position: relative; z-index: 10; display: flex; align-items: center; gap: 6px; padding: 8px 12px; min-width: 0; border-bottom: 1px solid var(--line); background: var(--surface); }
+@media (max-width: 359px) { .lay-bar { gap: 4px; padding: 8px; } .lay-bar .tool { width: 34px; height: 34px; } .seg button { padding: 7px 10px; } }
 .lay-bar .seg { margin: 0 auto; }
 .tool {
   flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; border: 1px solid var(--line);
