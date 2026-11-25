@@ -610,3 +610,16 @@ body.layout-mode main { max-width: none; padding: 0; }
 .ag-it { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14.5px; }
 .ag-it.done { text-decoration: line-through; color: var(--muted); }
 .ag-rel { color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
+
+
+/* ---- Top bar fits on narrow phones (brand, offline pill, info, install) ---- */
+.info-btn, .install-btn, .net-pill { flex: none; }
+.install-btn { white-space: nowrap; }
+.brand { min-width: 0; }
+.brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 440px) {
+  .install-btn { padding: 9px; gap: 0; font-size: 0; }
+  .install-btn svg { width: 20px; height: 20px; }
+  .net-pill .np-more { display: none; }
+  .topbar { gap: 6px; }
+}

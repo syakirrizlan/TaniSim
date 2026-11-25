@@ -5,7 +5,9 @@
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const TOKEN = /(early|mid|late|end)?[-\s]?\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b(?:\s+(\d{4}))?/gi;
+// Months must be written as month names with a capital ("Mar", "March"), so words
+// like "may", "market" or "decide" in a note never turn into dates.
+const TOKEN = /(?:\b([Ee]arly|[Mm]id|[Ll]ate|[Ee]nd)[-\s]?)?\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b(?:\s+(\d{4}))?/g;
 
 const pad = (n) => String(n).padStart(2, '0');
 const lastDay = (y, m) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
@@ -40,7 +42,7 @@ function yearFor(month, win) {
 }
 
 function tokenDate(tok, win, edge = 'start') {
-  const month = MONTHS.indexOf(tok.mon.toLowerCase());
+  const month = MONTHS.indexOf(tok.mon.slice(0, 3).toLowerCase());
   const year = tok.year ? Number(tok.year) : yearFor(month, win);
   const q = (tok.q || '').toLowerCase();
   if (!q) {
@@ -85,7 +87,7 @@ function bedTimeline(table, win, src) {
         if (bold) crop = bold[1].replace(/:$/, '').trim();
         else {
           // "Bendi picking early Apr", "Kangkung to end Mar": a plain crop name leads the text.
-          const lead = rawSeg.match(/^([A-Z][a-z]+(?: (?!(?:to|from|cut|pick|picking|early|mid|late|end)\b)[a-z]+)?)\s+(?=picking|to |cut|pick|from|early|mid|late|end|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/);
+          const lead = rawSeg.match(/^([A-Z][a-z]+(?: (?!(?:to|from|cut|pick|picking|early|mid|late|end)\b)[a-z]+)?)\s+(?=picking|to |cut|pick|from|early|mid|late|end|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/);
           if (lead && !verbOf(lead[1]) && !/^(first|weekly)$/i.test(lead[1])) crop = lead[1];
         }
         // "**Kangkung** — sow early Dec; …": the dated part comes after the dash.
@@ -137,6 +139,19 @@ function bedTimeline(table, win, src) {
   return events;
 }
 
+// A year written once at the end ("Nov – Dec 2026", "Dec – Jan 2027") belongs to the
+// last month; earlier months take that year, or the year before if they come later
+// in the calendar (Dec before Jan).
+function shareYear(toks) {
+  toks.forEach((t, i) => {
+    if (t.year) return;
+    const next = toks.slice(i + 1).find((x) => x.year);
+    if (!next) return;
+    const mi = MONTHS.indexOf(t.mon.slice(0, 3).toLowerCase()), mn = MONTHS.indexOf(next.mon.slice(0, 3).toLowerCase());
+    t.year = String(mi > mn ? Number(next.year) - 1 : Number(next.year));
+  });
+}
+
 /* ---------- Nursery: | Sow or collect | When | For | ---------- */
 function nursery(table, win, src) {
   const events = [];
@@ -145,12 +160,11 @@ function nursery(table, win, src) {
     const when = stripMd(row[1] || '');
     const toks = findTokens(when);
     if (!toks.length) continue;
-    // A year written once at the end ("Nov – Dec 2026") applies to every month in the range.
-    const year = toks.map((t) => t.year).filter(Boolean).pop();
-    toks.forEach((t) => { t.year ||= year; });
+    shareYear(toks);
     const s = tokenDate(toks[0], win);
     const range = toks.length > 1 && /[–-]/.test(when.slice(toks[0].end, toks[1].index));
-    const e = range ? tokenDate(toks[1], win, 'end') : null;
+    let e = range ? tokenDate(toks[1], win, 'end') : null;
+    if (e && e.date < s.date) e = null; // never show a range back to front
     events.push({
       kind: 'nursery', title: what, bed: stripMd(row[2] || ''), start: s.date, end: e ? e.date : undefined,
       monthOnly: s.monthOnly, when: e ? `${s.when} → ${e.when}` : s.when, src, text: `${stripMd(row[0])} · ${when}`,
@@ -165,13 +179,20 @@ function stages(table, src) {
   for (const row of table.rows) {
     const when = stripMd(row[1] || '').split(',')[0];
     const toks = findTokens(when);
-    if (!toks.length) continue;
+    if (!toks.length) {
+      // A stage given only as a year ("2028") spans that whole year.
+      const y = when.match(/\b(\d{4})\b/);
+      if (y) events.push({ kind: 'project', title: stripMd(row[0]).replace(/^\d+\.\s*/, ''), start: `${y[1]}-01-01`, end: `${y[1]}-12-31`, monthOnly: true, when: stripMd(row[1]), src, text: stripMd(row[2] || '') });
+      continue;
+    }
     const year = toks.map((t) => t.year).filter(Boolean).pop();
     if (!year) continue;
-    toks.forEach((t) => { t.year ||= year; t.q = undefined; });
+    shareYear(toks);
+    toks.forEach((t) => { t.q = undefined; });
     const win = { y0: Number(year), from: 0, to: 1e9 };
     const s = tokenDate(toks[0], win);
-    const e = toks.length > 1 ? tokenDate(toks[toks.length - 1], win, 'end') : tokenDate(toks[0], win, 'end');
+    let e = toks.length > 1 ? tokenDate(toks[toks.length - 1], win, 'end') : tokenDate(toks[0], win, 'end');
+    if (e.date < s.date) e = tokenDate(toks[0], win, 'end');
     events.push({ kind: 'project', title: stripMd(row[0]).replace(/^\d+\.\s*/, ''), start: s.date, end: e.date, monthOnly: true, when: stripMd(row[1]), src, text: stripMd(row[2] || '') });
   }
   return events;

@@ -31,6 +31,7 @@ const pad = (n) => String(n).padStart(2, '0');
 const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const dateOf = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const todayISO = () => isoOf(new Date());
+const validISO = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && isoOf(dateOf(s)) === s;
 const addDays = (s, n) => { const d = dateOf(s); d.setDate(d.getDate() + n); return isoOf(d); };
 const monthKey = (s) => s.slice(0, 7);
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -46,7 +47,7 @@ function store(key, value) {
 function loadTasks() {
   const raw = load(TASKS_KEY, []);
   if (!Array.isArray(raw)) return [];
-  return raw.filter((t) => t && typeof t.text === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.date))
+  return raw.filter((t) => t && typeof t.text === 'string' && validISO(t.date))
     .map((t) => ({ id: typeof t.id === 'string' ? t.id.slice(0, 40) : newId(), date: t.date, text: t.text.slice(0, 140), done: !!t.done }));
 }
 
@@ -120,7 +121,7 @@ export function mount(view, data) {
   };
   // Open on the requested day (#/calendar/2027-03-09) if given.
   const m = location.hash.match(/#\/calendar\/(\d{4}-\d{2}-\d{2})/);
-  if (m) { state.sel = m[1]; state.month = m[1].slice(0, 7); }
+  if (m && validISO(m[1])) { state.sel = m[1]; state.month = m[1].slice(0, 7); }
 
   view.innerHTML = `
     <div class="cal">
@@ -332,7 +333,11 @@ function onClick(e, root) {
   const cell = e.target.closest('[data-date]');
   if (cell) {
     state.sel = cell.dataset.date;
-    if (state.view === 'month' && state.sel.slice(0, 7) !== state.month) shiftMonth(state.sel > `${state.month}-31` ? 1 : -1), state.sel = cell.dataset.date;
+    if (state.view === 'month' && state.sel.slice(0, 7) !== state.month) {
+      shiftMonth(state.sel > `${state.month}-31` ? 1 : -1);
+      state.sel = cell.dataset.date;
+      renderHead(root);
+    }
     renderMain(root);
     renderDay(root);
     // On phones the day panel is below the grid: bring it into view.
@@ -372,7 +377,7 @@ function onKey(e, root) {
   e.preventDefault();
   const iso = addDays(cell.dataset.date, step);
   state.sel = iso;
-  if (iso.slice(0, 7) !== state.month) { shiftMonth(iso > cell.dataset.date ? 1 : -1); state.sel = iso; }
+  if (iso.slice(0, 7) !== state.month) { shiftMonth(iso > cell.dataset.date ? 1 : -1); state.sel = iso; renderHead(root); }
   renderMain(root);
   renderDay(root);
   root.querySelector(`.grid .cell[data-date="${iso}"]`)?.focus();

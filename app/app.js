@@ -345,13 +345,9 @@ function renderAbout() {
     </section>`;
   document.title = 'About · TaniSim';
   // Offline copy and storage
+  refreshOfflineStatus();
+  navigator.serviceWorker?.ready.then(() => setTimeout(refreshOfflineStatus, 300)).catch(() => {});
   (async () => {
-    const off = document.getElementById('stOffline');
-    try {
-      const keys = 'caches' in window ? await caches.keys() : [];
-      const shell = keys.find((k) => k.startsWith('tanisim-shell-'));
-      if (off) off.textContent = navigator.serviceWorker?.controller && shell ? `Yes (copy ${shell.slice(14, 20)})` : 'Not yet: open the app once online';
-    } catch { if (off) off.textContent = 'Unknown'; }
     const stg = document.getElementById('stStorage');
     try {
       const est = await navigator.storage?.estimate?.();
@@ -372,7 +368,7 @@ function renderAbout() {
       msg.textContent = 'A new version is downloading…';
       const ready = () => {
         msg.innerHTML = 'A new version is ready. <button type="button" class="link-btn inline" id="applyUpd">Reload now</button>';
-        document.getElementById('applyUpd').addEventListener('click', () => (swReg.waiting || w).postMessage('skipWaiting'));
+        document.getElementById('applyUpd').addEventListener('click', () => applyUpdate(swReg.waiting || w));
       };
       if (w.state === 'installed') ready();
       else w.addEventListener('statechange', () => { if (w.state === 'installed') ready(); });
@@ -382,6 +378,18 @@ function renderAbout() {
       btn.disabled = false;
     }
   });
+}
+
+async function refreshOfflineStatus() {
+  const off = document.getElementById('stOffline');
+  if (!off) return;
+  try {
+    const keys = 'caches' in window ? await caches.keys() : [];
+    const shell = keys.find((k) => k.startsWith('tanisim-shell-'));
+    if (navigator.serviceWorker?.controller && shell) off.textContent = `Yes (copy ${shell.slice(14, 20)})`;
+    else if (navigator.onLine && (swReg?.installing || !navigator.serviceWorker?.controller)) off.textContent = 'Saving for offline use…';
+    else off.textContent = 'Not yet: open the app once online';
+  } catch { off.textContent = 'Unknown'; }
 }
 
 /* ---------------- Graphics ---------------- */
@@ -451,6 +459,11 @@ function toast(text, action) {
 }
 
 let swReg = null;
+let reloadOnChange = false;
+function applyUpdate(worker) {
+  reloadOnChange = true;
+  worker.postMessage('skipWaiting');
+}
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
@@ -459,7 +472,7 @@ if ('serviceWorker' in navigator) {
       const firstInstall = !navigator.serviceWorker.controller;
       const offerUpdate = (worker) => toast('A newer version of your notes is ready.', {
         label: 'Reload',
-        run: () => worker.postMessage('skipWaiting'),
+        run: () => applyUpdate(worker),
       });
       if (reg.waiting && !firstInstall) offerUpdate(reg.waiting);
       reg.addEventListener('updatefound', () => {
@@ -472,7 +485,9 @@ if ('serviceWorker' in navigator) {
       });
       let reloading = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!firstInstall && !reloading) { reloading = true; location.reload(); }
+        // Reload when the user asked for an update (also in the session of the first install).
+        if ((reloadOnChange || !firstInstall) && !reloading) { reloading = true; location.reload(); }
+        refreshOfflineStatus();
       });
       // Check for new notes when the app comes back to the foreground.
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
