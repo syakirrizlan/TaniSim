@@ -1200,7 +1200,9 @@ function deleteSel() {
 }
 function select(id, { reveal = false } = {}) {
   ui.sel = id;
+  els.inspector.classList.remove('show-label');
   renderInspector();
+  els.root.classList.toggle('has-sel', !!st.items.find((i) => i.id === id));
   requestRender();
   if (reveal && id) requestAnimationFrame(() => requestAnimationFrame(() => revealSelected(id)));
 }
@@ -1210,23 +1212,37 @@ function revealSelected(id) {
   if (!els || !ui || ui.sel !== id || ui.drag || ui.animating) return;
   const g = els.world.querySelector(`[data-id="${CSS.escape(id)}"]`);
   if (!g || els.inspector.hidden) return;
-  let bottom = g.getBoundingClientRect().bottom;
-  let top = g.getBoundingClientRect().top;
-  els.world.querySelectorAll('.handle').forEach((h) => { const r = h.getBoundingClientRect(); bottom = Math.max(bottom, r.bottom); top = Math.min(top, r.top); });
-  const cardTop = els.inspector.getBoundingClientRect().top;
-  const stageTop = els.svg.getBoundingClientRect().top;
-  let dy = cardTop - 16 - bottom;
-  if (dy >= 0) return;
-  dy = Math.max(dy, stageTop + 56 - top); // don't push it off the top
-  if (dy >= 0) return;
+  const it = g.getBoundingClientRect();
+  let { left, right, top, bottom } = it;
+  els.world.querySelectorAll('.handle').forEach((h) => {
+    const r = h.getBoundingClientRect();
+    left = Math.min(left, r.left); right = Math.max(right, r.right); top = Math.min(top, r.top); bottom = Math.max(bottom, r.bottom);
+  });
+  // The panel is a few floating parts; take the box around the visible ones.
+  let pl = Infinity, pr = -Infinity, pt = Infinity, pb = -Infinity;
+  els.inspector.querySelectorAll(':scope > *').forEach((c) => {
+    const r = c.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    pl = Math.min(pl, r.left); pr = Math.max(pr, r.right); pt = Math.min(pt, r.top); pb = Math.max(pb, r.bottom);
+  });
+  if (!(pr > pl)) return;
+  const hidden = left < pr + 8 && right > pl - 8 && top < pb + 8 && bottom > pt - 8;
+  if (!hidden) return;
+  const stage = els.svg.getBoundingClientRect();
+  let dx = 0, dy = 0;
+  const roomRight = stage.right - 64; // keep clear of the zoom buttons
+  if (right + (pr + 16 - left) <= roomRight) dx = pr + 16 - left;
+  else if (top + (pb + 16 - top) < stage.bottom - 40) dy = pb + 16 - top;
+  else return;
   // A gentle slide that never blocks taps or drags (unlike camera turns).
-  if (reduceMotion()) { cam.ty += dy; requestRender(); saveSoon(); return; }
+  if (reduceMotion()) { cam.tx += dx; cam.ty += dy; requestRender(); saveSoon(); return; }
   const t0 = performance.now();
   let done = 0;
   const step = (now) => {
     if (!ui || ui.drag || ui.pinch) return; // the user took over
     const k = Math.min(1, (now - t0) / 300);
     const e = 1 - Math.pow(1 - k, 3);
+    cam.tx += dx * (e - done);
     cam.ty += dy * (e - done);
     done = e;
     render();
@@ -1241,9 +1257,9 @@ function sizeText(it) {
     const len = Math.max(it.w, it.d);
     const F = FENCE_STYLES[T.style];
     const posts = F && F.post ? ` · about ${Math.round(len / F.post) + 1} posts` : '';
-    return `${fmt(len)} m ${T.style === 'gate' ? 'wide' : 'long'}${posts}${T.resize ? ' · drag ⊕ to lengthen' : ''}`;
+    return `${fmt(len)} m ${T.style === 'gate' ? 'wide' : 'long'}${posts}${T.resize ? '<span class="hint"> · drag ⊕ to lengthen</span>' : ''}`;
   }
-  return `${fmt(it.w)} × ${fmt(it.d)} m · ${fmt(it.w * it.d)} m²${T.resize ? ' · drag ⊕ to resize' : ''}`;
+  return `${fmt(it.w)} × ${fmt(it.d)} m · ${fmt(it.w * it.d)} m²${T.resize ? '<span class="hint"> · drag ⊕ to resize</span>' : ''}`;
 }
 
 function renderInspector() {
@@ -1255,15 +1271,16 @@ function renderInspector() {
   box.hidden = false;
   box.innerHTML = `
     <div class="insp-head">
-      <div><div class="insp-name">${esc(T.name)}</div><div class="insp-size">${sizeText(it)}</div></div>
+      <div class="insp-title"><div class="insp-name">${esc(T.name)}</div><div class="insp-size">${sizeText(it)}</div></div>
       <button type="button" class="icon-btn" data-act="close" aria-label="Done">✕</button>
     </div>
     <label class="insp-label"><span>Label</span><input type="text" maxlength="24" placeholder="e.g. C1, Hut" value="${esc(it.label || '')}"></label>
     <div class="insp-actions">
-      <button type="button" data-act="rotate"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Rotate</button>
-      <button type="button" data-act="copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 4H6a2 2 0 0 0-2 2v10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Copy</button>
-      <button type="button" data-act="delete" class="danger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Delete</button>
-      ${blockC ? '<a class="insp-link" href="#/notes/05a-block-c-cash-beds">Block C schedule →</a>' : ''}
+      <button type="button" data-act="rotate" title="Rotate (R)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Rotate</span></button>
+      <button type="button" data-act="copy" title="Copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 4H6a2 2 0 0 0-2 2v10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>Copy</span></button>
+      <button type="button" data-act="labeltoggle" class="only-rail" title="Label" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Label</span></button>
+      ${blockC ? '<a class="insp-link" href="#/notes/05a-block-c-cash-beds" title="Block C schedule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>Block C schedule</span></a>' : ''}
+      <button type="button" data-act="delete" class="danger" title="Delete (Del)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Delete</span></button>
     </div>`;
   const input = box.querySelector('input');
   let pushed = false;
@@ -1274,6 +1291,13 @@ function renderInspector() {
     saveSoon();
   });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+  const lt = box.querySelector('[data-act=labeltoggle]');
+  lt.addEventListener('click', () => {
+    const open = !box.classList.contains('show-label');
+    box.classList.toggle('show-label', open);
+    lt.setAttribute('aria-expanded', String(open));
+    if (open) input.focus();
+  });
 }
 
 /* ---------------- Land shape mode ---------------- */
@@ -1523,7 +1547,7 @@ function onStageMove(e) {
 
 function renderInspectorSize(it) {
   const el = els.inspector.querySelector('.insp-size');
-  if (el) el.textContent = sizeText(it);
+  if (el) el.innerHTML = sizeText(it);
 }
 
 function cancelDrag() {
