@@ -1307,6 +1307,7 @@ function enterShape() {
   select(null);
   ui.shape = { selV: null };
   els.root.classList.add('shaping');
+  els.root.querySelector('[data-act=landtoggle]').setAttribute('aria-pressed', 'true');
   if (cam.t > 0.5) moveCamera({ t: 0 }); // corners are easiest to place from above
   requestRender();
 }
@@ -1314,6 +1315,7 @@ function exitShape() {
   if (!ui.shape) return;
   ui.shape = null;
   els.root.classList.remove('shaping');
+  els.root.querySelector('[data-act=landtoggle]').setAttribute('aria-pressed', 'false');
   fit(true);
   reportOffLand();
   requestRender();
@@ -1748,6 +1750,7 @@ function thumbSVG(T) {
 const ICONS = {
   undo: '<path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   redo: '<path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  land: '<path d="M4 18 7 6l8-2 5 7-4 9z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/><circle cx="7" cy="6" r="1.8" fill="currentColor"/><circle cx="15" cy="4" r="1.8" fill="currentColor"/><circle cx="20" cy="11" r="1.8" fill="currentColor"/><circle cx="16" cy="20" r="1.8" fill="currentColor"/><circle cx="4" cy="18" r="1.8" fill="currentColor"/>',
   turn: '<path d="M3 12a9 9 0 0 1 15.5-6.2M21 4v5h-5M21 12a9 9 0 0 1-15.5 6.2M3 20v-5h5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>',
   fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   more: '<circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/>',
@@ -1771,6 +1774,7 @@ export function mount(host) {
         <button type="button" data-view="0" aria-pressed="false">Plan</button>
         <button type="button" data-view="1" aria-pressed="true">3D</button>
       </div>
+      <button type="button" class="tool land-btn" data-act="landtoggle" aria-pressed="false" aria-label="Edit land shape" title="Edit land shape">${icon('land')}<span>Land</span></button>
       <button type="button" class="tool" data-act="turn" aria-label="Turn the view">${icon('turn')}</button>
       <div class="menu-wrap">
         <button type="button" class="tool" data-act="menu" aria-label="More" aria-haspopup="true" aria-expanded="false">${icon('more')}</button>
@@ -1926,6 +1930,7 @@ export function mount(host) {
         break;
       case 'plot': openPlotDialog(); break;
       case 'shape': enterShape(); break;
+      case 'landtoggle': if (ui.shape) exitShape(); else enterShape(); break;
       case 'shapedone': exitShape(); break;
       case 'rmcorner': removeCorner(); break;
       case 'bfence': openFenceDialog(); break;

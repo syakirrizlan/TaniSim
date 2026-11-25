@@ -39,7 +39,7 @@ A small web app that puts the notes on your phone: this week's rhythm, the next 
 - Switch between **Plan** (top-down, for measuring) and **3D** (diorama view), turn the view 90°, pinch or scroll to zoom.
 - Items can't overlap or leave the plot, except fields, paths and the road, which can sit under other things.
 - **Fences:** the **Fences** tray has wooden, barbed-wire, electric, chain-link, BRC mesh, bamboo and picket fences, a brick wall, a living hedge (pagar hidup) and a gate. Drag the ⊕ knob to lengthen one. Fences can meet and cross each other at corners. For the whole land, use ⋯ → **Boundary fence…**: it follows every side, even angled ones, and shows the perimeter and roughly how many posts you'll need.
-- **Land shape:** ⋯ → **Edit land shape**. Drag the corners to match your land and tap **+** on a side to add a corner. Each side shows its length in metres, and the area in acres updates as you go. Items left off the land turn red.
+- **Land shape:** tap the **Land** button in the toolbar (or ⋯ → **Edit land shape**). Drag the corners to match your land and tap **+** on a side to add a corner. Each side shows its length in metres, and the area in acres updates as you go. Items left off the land turn red.
 - **⋯ menu:** start from the Block C layout, edit the land shape, reset the land to a rectangle, save a picture (PNG), or export/import a layout file.
 - The layout saves on the device. To move it to another phone or computer, use Export, then Import there.
 

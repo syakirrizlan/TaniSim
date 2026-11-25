@@ -467,3 +467,8 @@ body.layout-mode main { max-width: none; padding: 0; }
 .fo-text { display: grid; line-height: 1.25; }
 .fo-text b { font-size: 15px; }
 .fo-text small { color: var(--muted); font-size: 12.5px; }
+
+/* Land-shape button on the toolbar */
+.tool.land-btn { width: auto; padding: 0 10px; gap: 5px; display: inline-flex; align-items: center; font-weight: 700; font-size: 14px; }
+.tool.land-btn[aria-pressed="true"] { background: #F2B33D; border-color: #F2B33D; color: #18241C; }
+@media (max-width: 420px) { .tool.land-btn span { display: none; } .tool.land-btn { width: 38px; padding: 0; justify-content: center; } }
